@@ -515,11 +515,11 @@ The codebase should easily accommodate:
 ## Implementation Phases
 
 ### Phase 1: Foundation
-- [ ] Project skeleton and module setup
-- [ ] Config loading (global + project)
-- [ ] Basic CLI with `-h`, `-l`, `-d`
-- [ ] Filesystem sandbox
-- [ ] Ignore pattern matching
+- [x] Project skeleton and module setup
+- [x] Config loading (global + project)
+- [x] Basic CLI with `-h`, `-l`, `-d`
+- [x] Filesystem sandbox
+- [x] Ignore pattern matching
 
 ### Phase 2: LLM Layer
 - [ ] Provider interface (with LoadModel/UnloadModel)

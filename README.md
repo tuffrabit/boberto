@@ -1,29 +1,144 @@
-# boberto
-Boberto is a CLI coding agent
+# Boberto
 
-## features
+Boberto is a Go-based CLI coding agent implementing the "ralph loop" pattern: a worker-reviewer iterative cycle for autonomous code generation and refinement.
 
-- read a prd and iterate until done
-- openai and anthropic api compatible
-- can operate with or without a reviewer model
-- baked in agent tools for basic needs: readfile, glob, grep, writefile
+## Overview
 
-## operating flow
+Boberto takes a Product Requirements Document (PRD.md) and autonomously implements it through an iterative loop:
 
-- on each iteration the worker reads the prd, summary, feedback, and explores the project filesystem
-- the worker then does the work until it thinks it is done
-- worker outputs writes a summary file to the project root
-- the reviewer reads the prd, summary, and changed files
-- reviewer writes a feeback file to the project root with its findings
-- conversation context is dumped and the next iteration begins
+1. **Worker Agent**: Reads the PRD, writes code, creates a summary of work done
+2. **Reviewer Agent**: Reviews the work, provides feedback
+3. **Loop**: Continues until the reviewer is satisfied or iteration limit reached
 
-## cli arguments
+## Features
 
-- -l / --limit, max number of iterations, if omitted there is no hard limit and the iterations will only stop if the reviewer decides there is no feedback
-- -i / --init, creates a prd.md template in the current directory
-- -d / --debug, prints agent conversation to stdout
+- **Local & Cloud LLM Support**: Works with LM Studio, Ollama, OpenAI, and Anthropic
+- **Model Switching**: Automatically unloads worker model and loads reviewer model to manage VRAM
+- **Filesystem Sandbox**: All file operations constrained to project root with ignore patterns
+- **Whitelist Enforcement**: Sensitive tools (bash, web search) require explicit allowlisting
+- **Hot-reloadable Config**: Project config changes picked up each iteration
 
-## safety
+## Installation
 
-- the agent will not execute tools outside of the project directory
-- outside of api calls to llm provider, the agent will not make network requests
+### Prerequisites
+
+- Go 1.25.6 or later
+- A PRD.md file in your project directory
+
+### Build from Source
+
+```bash
+git clone <repository>
+cd boberto
+go build -o boberto ./cmd/boberto/main.go
+```
+
+Or install to `$GOPATH/bin`:
+
+```bash
+go install ./cmd/boberto
+```
+
+## Usage
+
+```bash
+boberto [options] <project-directory>
+```
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `-h, --help` | Show help message and exit |
+| `-l, --limit N` | Maximum number of iterations (default: unlimited) |
+| `-d, --debug` | Print agent conversation to stdout |
+| `--no-model-switch` | Disable model loading/unloading between phases |
+
+### Examples
+
+```bash
+# Run in current directory with default settings
+./boberto
+
+# Run with iteration limit and debug output
+./boberto -l 5 -d /path/to/project
+
+# Disable model switching (keep both models in VRAM)
+./boberto --no-model-switch
+```
+
+## Configuration
+
+### Global Config (`~/.boberto/config.json`)
+
+Created automatically on first run with sensible defaults:
+
+```json
+{
+  "models": {
+    "qwen2.5-coder": {
+      "api_type": "openai",
+      "api_key": "not-needed",
+      "uri": "http://localhost:1234/v1/chat/completions",
+      "name": "qwen2.5-coder-14b",
+      "local": true,
+      "provider": "lmstudio",
+      "context_window": 32768,
+      "bail_threshold": 0.75
+    }
+  },
+  "worker": {
+    "default_model": "qwen2.5-coder"
+  },
+  "reviewer": {
+    "default_model": "llama3.3-reviewer"
+  }
+}
+```
+
+### Project Config (`.boberto/config.json`)
+
+Optional per-project configuration (hot-reloadable):
+
+```json
+{
+  "ignore": [
+    "node_modules/**",
+    "*.log",
+    ".git/**"
+  ],
+  "whitelist": {
+    "bash": ["go test ./...", "go build"],
+    "web_search": true,
+    "web_fetch": ["https://api.github.com/**"]
+  }
+}
+```
+
+## Project Structure
+
+```
+.
+├── PRD.md              # Product Requirements Document (required)
+├── SUMMARY.md          # Worker progress report (auto-generated)
+├── FEEDBACK.md         # Reviewer feedback (auto-generated)
+└── .boberto/
+    └── config.json     # Project config (optional)
+```
+
+## Development
+
+```bash
+# Build
+go build -o boberto ./cmd/boberto/main.go
+
+# Run directly
+go run ./cmd/boberto/main.go --help
+
+# Test
+go test ./...
+```
+
+## License
+
+[LICENSE](LICENSE)
