@@ -58,7 +58,9 @@ boberto/
       "uri": "http://localhost:1234/v1/chat/completions",
       "name": "qwen2.5-coder-14b",
       "local": true,
-      "provider": "lmstudio"
+      "provider": "lmstudio",
+      "context_window": 32768,
+      "bail_threshold": 0.75
     },
     "llama3.3-reviewer": {
       "api_type": "openai", 
@@ -66,21 +68,27 @@ boberto/
       "uri": "http://localhost:11434/v1/chat/completions",
       "name": "llama3.3",
       "local": true,
-      "provider": "ollama"
+      "provider": "ollama",
+      "context_window": 128000,
+      "bail_threshold": 0.85
     },
     "gpt-4o": {
       "api_type": "openai",
       "api_key": "sk-...",
       "uri": "https://api.openai.com/v1/chat/completions",
       "name": "gpt-4o",
-      "local": false
+      "local": false,
+      "context_window": 128000,
+      "bail_threshold": 0.80
     },
     "claude-sonnet": {
       "api_type": "anthropic",
       "api_key": "sk-ant-...",
       "uri": "https://api.anthropic.com/v1/messages",
       "name": "claude-3-5-sonnet-20241022",
-      "local": false
+      "local": false,
+      "context_window": 200000,
+      "bail_threshold": 0.80
     }
   },
   "worker": {
@@ -186,7 +194,7 @@ type Tool interface {
     Name() string
     Description() string
     Parameters() jsonschema.Schema  // JSON Schema for validation
-    Execute(ctx context.Context, args map[string]any) (Result, error)
+    Execute(ctx context.Context, args map[string]any, whitelist Whitelist) (Result, error)
     IsSensitive() bool              // Requires whitelist check
 }
 
@@ -194,6 +202,13 @@ type Result struct {
     Content string
     Error   error
 }
+
+type Whitelist struct {
+    Bash       []string // Allowed bash commands (patterns)
+    WebSearch  bool     // Whether web search is enabled
+    WebFetch   []string // Allowed URL patterns
+}
+```
 ```
 
 ### Built-in Tools
@@ -211,9 +226,46 @@ type Result struct {
 ### Tool Registry
 
 - Tools register themselves via `init()` functions
-- Registry filters available tools based on project whitelist
-- Sensitive tools check whitelist before execution
+- Registry provides available tools to agent
 - Tool failures return error to LLM for retry
+
+### Whitelist Enforcement
+
+**Critical**: Whitelist checking happens **inside the tool's Execute method**, not in the registry.
+
+```go
+func (t *BashTool) Execute(ctx context.Context, args map[string]any, whitelist Whitelist) (Result, error) {
+    command := args["command"].(string)
+    
+    // Tool ITSELF checks whitelist
+    if !whitelist.AllowsBash(command) {
+        return Result{}, fmt.Errorf("command not in whitelist: %s", command)
+    }
+    
+    // Execute...
+}
+```
+
+**Why this design?**
+- LLM may craft tool calls that bypass registry filtering
+- Tool receives raw arguments from LLM response
+- Tool must validate against whitelist before acting
+- Each sensitive tool implements its own whitelist logic:
+  - `bash`: Checks command against allowed patterns
+  - `web_search`: Checks if search is enabled
+  - `web_fetch`: Checks URL against allowed patterns
+
+**Whitelist Config Structure** (from project config):
+
+```json
+{
+  "whitelist": {
+    "bash": ["go test ./...", "go build", "make build", "npm run build"],
+    "web_search": true,
+    "web_fetch": ["https://api.github.com/**", "https://docs.rs/**"]
+  }
+}
+```
 
 ## LLM Client Design
 
@@ -321,10 +373,32 @@ Expected Files:
 ### Context Window Strategy
 
 1. **Pre-flight**: Count tokens in system prompt + PRD + previous files
-2. **Reserve**: Keep 20% buffer for response + tool results
+2. **Reserve**: Keep buffer for response + tool results (based on `1 - bail_threshold`)
 3. **Monitor**: Track cumulative usage during conversation
-4. **Bail condition**: When `used_tokens > (context_window * 0.8)`
+4. **Bail condition**: When `used_tokens > (context_window * bail_threshold)`
 5. **Action**: Write summary/feedback and start next iteration
+
+### Per-Model Bail Threshold
+
+Each model can configure its own bail threshold in the global config:
+
+```json
+{
+  "models": {
+    "my-model": {
+      "bail_threshold": 0.75
+    }
+  }
+}
+```
+
+- **Default**: `0.80` (80% of context window)
+- **Range**: `0.0` - `1.0` (values outside this range clamped)
+- **Use case**: Adjust based on model behavior:
+  - Lower threshold (0.75): For models that underestimate token counts
+  - Higher threshold (0.90): For models with accurate counting, maximizing context usage
+
+The agent calculates: `bail_limit = context_window * bail_threshold`
 
 ### Token Counting
 
