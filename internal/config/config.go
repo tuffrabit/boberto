@@ -19,14 +19,15 @@ func GlobalConfigPath() string {
 
 // ModelConfig represents a single model configuration.
 type ModelConfig struct {
-	APIType         string  `json:"api_type"`
-	APIKey          string  `json:"api_key"`
-	URI             string  `json:"uri"`
-	Name            string  `json:"name"`
-	Local           bool    `json:"local"`
-	Provider        string  `json:"provider,omitempty"`
-	ContextWindow   int     `json:"context_window"`
-	BailThreshold   float64 `json:"bail_threshold"`
+	APIType            string  `json:"api_type"`
+	APIKey             string  `json:"api_key"`
+	URI                string  `json:"uri"`
+	Name               string  `json:"name"`
+	Local              bool    `json:"local"`
+	Provider           string  `json:"provider,omitempty"`
+	ContextWindow      int     `json:"context_window"`
+	BailThreshold      float64 `json:"bail_threshold"`
+	SupportsToolCalling bool   `json:"supports_tool_calling"`
 }
 
 // WorkerConfig represents worker agent configuration.
@@ -51,42 +52,46 @@ func DefaultGlobal() Global {
 	return Global{
 		Models: map[string]ModelConfig{
 			"qwen2.5-coder": {
-				APIType:       "openai",
-				APIKey:        "not-needed",
-				URI:           "http://localhost:1234/v1/chat/completions",
-				Name:          "qwen2.5-coder-14b",
-				Local:         true,
-				Provider:      "lmstudio",
-				ContextWindow: 32768,
-				BailThreshold: 0.75,
+				APIType:             "openai",
+				APIKey:              "not-needed",
+				URI:                 "http://localhost:1234/v1/chat/completions",
+				Name:                "qwen2.5-coder-14b",
+				Local:               true,
+				Provider:            "lmstudio",
+				ContextWindow:       32768,
+				BailThreshold:       0.75,
+				SupportsToolCalling: true,
 			},
 			"llama3.3-reviewer": {
-				APIType:       "openai",
-				APIKey:        "not-needed",
-				URI:           "http://localhost:11434/v1/chat/completions",
-				Name:          "llama3.3",
-				Local:         true,
-				Provider:      "ollama",
-				ContextWindow: 128000,
-				BailThreshold: 0.85,
+				APIType:             "openai",
+				APIKey:              "not-needed",
+				URI:                 "http://localhost:11434/v1/chat/completions",
+				Name:                "llama3.3",
+				Local:               true,
+				Provider:            "ollama",
+				ContextWindow:       128000,
+				BailThreshold:       0.85,
+				SupportsToolCalling: false,
 			},
 			"gpt-4o": {
-				APIType:       "openai",
-				APIKey:        "",
-				URI:           "https://api.openai.com/v1/chat/completions",
-				Name:          "gpt-4o",
-				Local:         false,
-				ContextWindow: 128000,
-				BailThreshold: 0.80,
+				APIType:             "openai",
+				APIKey:              "",
+				URI:                 "https://api.openai.com/v1/chat/completions",
+				Name:                "gpt-4o",
+				Local:               false,
+				ContextWindow:       128000,
+				BailThreshold:       0.80,
+				SupportsToolCalling: true,
 			},
 			"claude-sonnet": {
-				APIType:       "anthropic",
-				APIKey:        "",
-				URI:           "https://api.anthropic.com/v1/messages",
-				Name:          "claude-3-5-sonnet-20241022",
-				Local:         false,
-				ContextWindow: 200000,
-				BailThreshold: 0.80,
+				APIType:             "anthropic",
+				APIKey:              "",
+				URI:                 "https://api.anthropic.com/v1/messages",
+				Name:                "claude-3-5-sonnet-20241022",
+				Local:               false,
+				ContextWindow:       200000,
+				BailThreshold:       0.80,
+				SupportsToolCalling: true,
 			},
 		},
 		Worker: WorkerConfig{
