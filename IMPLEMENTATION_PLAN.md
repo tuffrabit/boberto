@@ -604,16 +604,26 @@ The codebase should easily accommodate:
 - [x] Sensitive tools: bash, web_fetch
 - [x] Whitelist enforcement
 
-### Phase 4: Agent Core
-- [ ] Worker implementation (tool calling **required**)
+### Phase 4: Worker Agent
+- [ ] Worker prompt construction (tools, PRD, previous SUMMARY/FEEDBACK)
+- [ ] Worker tool calling loop
+- [ ] SUMMARY.md generation
+- [ ] Token usage tracking per iteration
+
+### Phase 5: Reviewer Agent
 - [ ] Reviewer implementation - tool calling mode
 - [ ] Reviewer implementation - Boberto-mediated mode (no tool support)
-- [ ] Iteration loop
-- [ ] Model switching logic (worker↔reviewer)
-- [ ] SUMMARY.md / FEEDBACK.md generation
-- [ ] Token limit bail logic
+- [ ] FEEDBACK.md generation
+- [ ] "LGTM" / completion detection
 
-### Phase 5: Polish
+### Phase 6: Ralph Loop
+- [ ] Iteration orchestration (start → worker → reviewer → repeat)
+- [ ] Model switching logic (worker↔reviewer VRAM management)
+- [ ] Token limit bail logic (threshold-based iteration cutoff)
+- [ ] Config hot-reload each iteration
+- [ ] Iteration limit enforcement (`-l` flag)
+
+### Phase 7: Polish
 - [ ] Error handling refinements
 - [ ] Debug output (`-d` flag)
 - [ ] Iteration timing display
