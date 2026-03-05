@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tuffrabit/boberto/internal/config"
+	"github.com/tuffrabit/boberto/internal/debug"
 	"github.com/tuffrabit/boberto/internal/fs"
 	"github.com/tuffrabit/boberto/internal/llm"
 	"github.com/tuffrabit/boberto/internal/tools"
@@ -20,7 +21,7 @@ type Worker struct {
 	modelConfig  config.ModelConfig
 	sandbox      *fs.Sandbox
 	projectDir   string
-	debug        bool
+	debug        *debug.Logger
 
 	// Token tracking
 	tokensUsed   int
@@ -37,7 +38,7 @@ type WorkerOptions struct {
 	ModelConfig  config.ModelConfig
 	Sandbox      *fs.Sandbox
 	ProjectDir   string
-	Debug        bool
+	Debug        *debug.Logger
 	Iteration    int
 }
 
@@ -45,12 +46,17 @@ type WorkerOptions struct {
 func NewWorker(opts WorkerOptions) *Worker {
 	bailLimit := int(float64(opts.ModelConfig.ContextWindow) * opts.ModelConfig.BailThreshold)
 	
+	dbg := opts.Debug
+	if dbg == nil {
+		dbg = debug.NewLogger(false)
+	}
+	
 	return &Worker{
 		provider:    opts.Provider,
 		modelConfig: opts.ModelConfig,
 		sandbox:     opts.Sandbox,
 		projectDir:  opts.ProjectDir,
-		debug:       opts.Debug,
+		debug:       dbg,
 		tokensUsed:  0,
 		bailLimit:   bailLimit,
 		iteration:   opts.Iteration,
@@ -93,10 +99,9 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 	systemTokens, _ := w.provider.CountTokens(systemPrompt)
 	w.tokensUsed = systemTokens
 
-	if w.debug {
-		fmt.Printf("[Worker] System prompt tokens: %d\n", systemTokens)
-		fmt.Printf("[Worker] Bail limit: %d tokens\n", w.bailLimit)
-	}
+	w.debug.Section("WORKER PHASE - Iteration %d", w.iteration)
+	w.debug.Log("System prompt tokens: %d", systemTokens)
+	w.debug.Log("Bail limit: %d tokens", w.bailLimit)
 
 	// Initialize conversation
 	messages := []llm.Message{}
@@ -110,9 +115,7 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 	for {
 		// Check if we're approaching the bail threshold before making the request
 		if w.tokensUsed >= w.bailLimit {
-			if w.debug {
-				fmt.Printf("[Worker] Approaching bail limit (%d/%d tokens), wrapping up...\n", w.tokensUsed, w.bailLimit)
-			}
+			w.debug.Log("Approaching bail limit (%d/%d tokens), wrapping up...", w.tokensUsed, w.bailLimit)
 			
 			// Send a wrap-up message
 			wrapUpMsg := llm.Message{
@@ -161,9 +164,7 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 			MaxTokens: 4096,
 		}
 
-		if w.debug {
-			fmt.Printf("[Worker] Sending request to LLM...\n")
-		}
+		w.debug.Log("Sending request to LLM...")
 
 		resp, err := w.provider.Complete(ctx, req)
 		if err != nil {
@@ -172,14 +173,9 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 
 		w.tokensUsed += resp.Usage.TotalTokens
 
-		if w.debug {
-			fmt.Printf("[Worker] Response received. Tokens used this exchange: %d (total: %d/%d)\n", 
-				resp.Usage.TotalTokens, w.tokensUsed, w.bailLimit)
-			if resp.Content != "" {
-				fmt.Printf("[Worker] Content preview: %s...\n", truncate(resp.Content, 100))
-			}
-			fmt.Printf("[Worker] Tool calls: %d\n", len(resp.ToolCalls))
-		}
+		w.debug.Log("Response received. Tokens used this exchange: %d (total: %d/%d)", 
+			resp.Usage.TotalTokens, w.tokensUsed, w.bailLimit)
+		w.debug.TokenStatus(w.tokensUsed, w.bailLimit)
 
 		// Add assistant message with content and tool calls
 		assistantMsg := llm.Message{
@@ -233,10 +229,6 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 
 // executeToolCall executes a single tool call and returns the result.
 func (w *Worker) executeToolCall(ctx context.Context, tc llm.ToolCall, whitelist config.Whitelist) tools.Result {
-	if w.debug {
-		fmt.Printf("[Worker] Executing tool: %s\n", tc.Name)
-	}
-
 	result, err := tools.Execute(ctx, tc.Name, tc.Arguments, whitelist)
 	if err != nil {
 		result = tools.Failure(err.Error())
@@ -247,13 +239,7 @@ func (w *Worker) executeToolCall(ctx context.Context, tc llm.ToolCall, whitelist
 		w.wroteFileThisIteration = true
 	}
 
-	if w.debug {
-		if result.IsError {
-			fmt.Printf("[Worker] Tool error: %s\n", result.Error)
-		} else {
-			fmt.Printf("[Worker] Tool result preview: %s...\n", truncate(result.Content, 100))
-		}
-	}
+	w.debug.ToolExecution(tc.Name, tc.Arguments, result.Content, result.IsError)
 
 	return result
 }
@@ -352,9 +338,7 @@ func (w *Worker) loadFeedback() (string, error) {
 
 // writeSummary writes the SUMMARY.md file.
 func (w *Worker) writeSummary(ctx context.Context, content string) error {
-	if w.debug {
-		fmt.Printf("[Worker] Writing SUMMARY.md\n")
-	}
+	w.debug.Log("Writing SUMMARY.md (%d bytes)", len(content))
 	
 	data := []byte(content)
 	return w.sandbox.WriteFile("SUMMARY.md", data, 0644)

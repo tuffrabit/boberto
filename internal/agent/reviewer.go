@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tuffrabit/boberto/internal/config"
+	"github.com/tuffrabit/boberto/internal/debug"
 	"github.com/tuffrabit/boberto/internal/fs"
 	"github.com/tuffrabit/boberto/internal/llm"
 	"github.com/tuffrabit/boberto/internal/tools"
@@ -20,7 +21,7 @@ type Reviewer struct {
 	modelConfig config.ModelConfig
 	sandbox     *fs.Sandbox
 	projectDir  string
-	debug       bool
+	debug       *debug.Logger
 
 	// Token tracking
 	tokensUsed int
@@ -36,7 +37,7 @@ type ReviewerOptions struct {
 	ModelConfig config.ModelConfig
 	Sandbox     *fs.Sandbox
 	ProjectDir  string
-	Debug       bool
+	Debug       *debug.Logger
 	Iteration   int
 }
 
@@ -44,12 +45,17 @@ type ReviewerOptions struct {
 func NewReviewer(opts ReviewerOptions) *Reviewer {
 	bailLimit := int(float64(opts.ModelConfig.ContextWindow) * opts.ModelConfig.BailThreshold)
 
+	dbg := opts.Debug
+	if dbg == nil {
+		dbg = debug.NewLogger(false)
+	}
+
 	return &Reviewer{
 		provider:    opts.Provider,
 		modelConfig: opts.ModelConfig,
 		sandbox:     opts.Sandbox,
 		projectDir:  opts.ProjectDir,
-		debug:       opts.Debug,
+		debug:       dbg,
 		tokensUsed:  0,
 		bailLimit:   bailLimit,
 		iteration:   opts.Iteration,
@@ -101,10 +107,9 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 	systemTokens, _ := r.provider.CountTokens(systemPrompt)
 	r.tokensUsed = systemTokens
 
-	if r.debug {
-		fmt.Printf("[Reviewer] System prompt tokens: %d\n", systemTokens)
-		fmt.Printf("[Reviewer] Bail limit: %d tokens\n", r.bailLimit)
-	}
+	r.debug.Section("REVIEWER PHASE - Iteration %d", r.iteration)
+	r.debug.Log("System prompt tokens: %d", systemTokens)
+	r.debug.Log("Bail limit: %d tokens", r.bailLimit)
 
 	// Initialize conversation
 	messages := []llm.Message{}
@@ -117,9 +122,7 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 	for {
 		// Check if we're approaching the bail threshold
 		if r.tokensUsed >= r.bailLimit {
-			if r.debug {
-				fmt.Printf("[Reviewer] Approaching bail limit (%d/%d tokens), wrapping up...\n", r.tokensUsed, r.bailLimit)
-			}
+			r.debug.Log("Approaching bail limit (%d/%d tokens), wrapping up...", r.tokensUsed, r.bailLimit)
 
 			// Send a wrap-up message
 			wrapUpMsg := llm.Message{
@@ -162,9 +165,7 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 			MaxTokens: 4096,
 		}
 
-		if r.debug {
-			fmt.Printf("[Reviewer] Sending request to LLM...\n")
-		}
+		r.debug.Log("Sending request to LLM...")
 
 		resp, err := r.provider.Complete(ctx, req)
 		if err != nil {
@@ -173,14 +174,9 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 
 		r.tokensUsed += resp.Usage.TotalTokens
 
-		if r.debug {
-			fmt.Printf("[Reviewer] Response received. Tokens used this exchange: %d (total: %d/%d)\n",
-				resp.Usage.TotalTokens, r.tokensUsed, r.bailLimit)
-			if resp.Content != "" {
-				fmt.Printf("[Reviewer] Content preview: %s...\n", truncate(resp.Content, 100))
-			}
-			fmt.Printf("[Reviewer] Tool calls: %d\n", len(resp.ToolCalls))
-		}
+		r.debug.Log("Response received. Tokens used this exchange: %d (total: %d/%d)",
+			resp.Usage.TotalTokens, r.tokensUsed, r.bailLimit)
+		r.debug.TokenStatus(r.tokensUsed, r.bailLimit)
 
 		// Add assistant message
 		assistantMsg := llm.Message{
@@ -251,16 +247,13 @@ func (r *Reviewer) runMediatedMode(ctx context.Context, whitelist config.Whiteli
 	systemTokens, _ := r.provider.CountTokens(systemPrompt)
 	r.tokensUsed = systemTokens
 
-	if r.debug {
-		fmt.Printf("[Reviewer] System prompt tokens: %d\n", systemTokens)
-		fmt.Printf("[Reviewer] Bail limit: %d tokens\n", r.bailLimit)
-	}
+	r.debug.Section("REVIEWER PHASE (Mediated) - Iteration %d", r.iteration)
+	r.debug.Log("System prompt tokens: %d", systemTokens)
+	r.debug.Log("Bail limit: %d tokens", r.bailLimit)
 
 	// Check if already over bail limit
 	if r.tokensUsed >= r.bailLimit {
-		if r.debug {
-			fmt.Printf("[Reviewer] Context too large (%d tokens), using minimal context...\n", r.tokensUsed)
-		}
+		r.debug.Log("Context too large (%d tokens), using minimal context...", r.tokensUsed)
 		// Use minimal context
 		systemPrompt = r.buildMinimalSystemPrompt(prdContent, summaryContent)
 		systemTokens, _ = r.provider.CountTokens(systemPrompt)
@@ -275,9 +268,7 @@ func (r *Reviewer) runMediatedMode(ctx context.Context, whitelist config.Whiteli
 		MaxTokens: 4096,
 	}
 
-	if r.debug {
-		fmt.Printf("[Reviewer] Sending mediated review request...\n")
-	}
+	r.debug.Log("Sending mediated review request...")
 
 	resp, err := r.provider.Complete(ctx, req)
 	if err != nil {
@@ -286,11 +277,9 @@ func (r *Reviewer) runMediatedMode(ctx context.Context, whitelist config.Whiteli
 
 	r.tokensUsed += resp.Usage.TotalTokens
 
-	if r.debug {
-		fmt.Printf("[Reviewer] Response received. Tokens used: %d (total: %d/%d)\n",
-			resp.Usage.TotalTokens, r.tokensUsed, r.bailLimit)
-		fmt.Printf("[Reviewer] Content preview: %s...\n", truncate(resp.Content, 100))
-	}
+	r.debug.Log("Response received. Tokens used: %d (total: %d/%d)",
+		resp.Usage.TotalTokens, r.tokensUsed, r.bailLimit)
+	r.debug.TokenStatus(r.tokensUsed, r.bailLimit)
 
 	// Write feedback file
 	feedback := resp.Content
@@ -398,22 +387,12 @@ func (r *Reviewer) buildFileTree(whitelist config.Whitelist) (string, error) {
 
 // executeToolCall executes a single tool call and returns the result.
 func (r *Reviewer) executeToolCall(ctx context.Context, tc llm.ToolCall, whitelist config.Whitelist) tools.Result {
-	if r.debug {
-		fmt.Printf("[Reviewer] Executing tool: %s\n", tc.Name)
-	}
-
 	result, err := tools.Execute(ctx, tc.Name, tc.Arguments, whitelist)
 	if err != nil {
 		result = tools.Failure(err.Error())
 	}
 
-	if r.debug {
-		if result.IsError {
-			fmt.Printf("[Reviewer] Tool error: %s\n", result.Error)
-		} else {
-			fmt.Printf("[Reviewer] Tool result preview: %s...\n", truncate(result.Content, 100))
-		}
-	}
+	r.debug.ToolExecution(tc.Name, tc.Arguments, result.Content, result.IsError)
 
 	return result
 }
@@ -550,9 +529,7 @@ func (r *Reviewer) loadSummary() (string, error) {
 
 // writeFeedback writes the FEEDBACK.md file.
 func (r *Reviewer) writeFeedback(ctx context.Context, content string) error {
-	if r.debug {
-		fmt.Printf("[Reviewer] Writing FEEDBACK.md (length: %d)\n", len(content))
-	}
+	r.debug.Log("Writing FEEDBACK.md (%d bytes)", len(content))
 
 	data := []byte(content)
 	return r.sandbox.WriteFile("FEEDBACK.md", data, 0644)

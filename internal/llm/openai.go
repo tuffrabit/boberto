@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/tuffrabit/boberto/internal/debug"
 )
 
 // OpenAIProvider implements the Provider interface for OpenAI-compatible APIs.
@@ -15,10 +17,16 @@ type OpenAIProvider struct {
 	apiKey string
 	baseURL string
 	client  *http.Client
+	debug   *debug.Logger
 }
 
 // NewOpenAIProvider creates a new OpenAI provider.
 func NewOpenAIProvider(apiKey, baseURL string) *OpenAIProvider {
+	return NewOpenAIProviderWithDebug(apiKey, baseURL, debug.NewLogger(false))
+}
+
+// NewOpenAIProviderWithDebug creates a new OpenAI provider with debug logging.
+func NewOpenAIProviderWithDebug(apiKey, baseURL string, debugLogger *debug.Logger) *OpenAIProvider {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
@@ -26,7 +34,13 @@ func NewOpenAIProvider(apiKey, baseURL string) *OpenAIProvider {
 		apiKey:  apiKey,
 		baseURL: baseURL,
 		client:  &http.Client{},
+		debug:   debugLogger,
 	}
+}
+
+// SetDebugLogger sets the debug logger for this provider.
+func (p *OpenAIProvider) SetDebugLogger(debugLogger *debug.Logger) {
+	p.debug = debugLogger
 }
 
 // openAIMessage represents a message in the OpenAI API format.
@@ -157,6 +171,26 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 		Temperature: 0.7,
 	}
 	
+	// Debug logging: Request
+	if p.debug.IsEnabled() {
+		msgMaps := make([]map[string]interface{}, len(req.Messages))
+		for i, msg := range req.Messages {
+			msgMaps[i] = map[string]interface{}{
+				"role":         msg.Role,
+				"content":      msg.Content,
+				"tool_call_id": msg.ToolCallID,
+			}
+		}
+		toolMaps := make([]map[string]interface{}, len(req.Tools))
+		for i, tool := range req.Tools {
+			toolMaps[i] = map[string]interface{}{
+				"name":        tool.Name,
+				"description": tool.Description,
+			}
+		}
+		p.debug.Request(req.Model, req.System, msgMaps, toolMaps)
+	}
+	
 	body, err := json.Marshal(oaiReq)
 	if err != nil {
 		return Response{}, fmt.Errorf("failed to marshal request: %w", err)
@@ -224,7 +258,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 	// Determine if we're done based on finish_reason
 	done := choice.FinishReason == "stop"
 	
-	return Response{
+	resp := Response{
 		Content:   message.Content,
 		ToolCalls: toolCalls,
 		Usage: TokenUsage{
@@ -233,7 +267,26 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 			TotalTokens:  oaiResp.Usage.TotalTokens,
 		},
 		Done: done,
-	}, nil
+	}
+	
+	// Debug logging: Response
+	if p.debug.IsEnabled() {
+		tcMaps := make([]map[string]interface{}, len(toolCalls))
+		for i, tc := range toolCalls {
+			tcMaps[i] = map[string]interface{}{
+				"id":        tc.ID,
+				"name":      tc.Name,
+				"arguments": tc.Arguments,
+			}
+		}
+		p.debug.Response(resp.Content, tcMaps, map[string]int{
+			"input":  resp.Usage.InputTokens,
+			"output": resp.Usage.OutputTokens,
+			"total":  resp.Usage.TotalTokens,
+		})
+	}
+	
+	return resp, nil
 }
 
 // CountTokens estimates token count using the approximate method.

@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/tuffrabit/boberto/internal/debug"
 )
 
 // AnthropicProvider implements the Provider interface for Anthropic's Claude API.
@@ -16,10 +18,16 @@ type AnthropicProvider struct {
 	apiKey  string
 	baseURL string
 	client  *http.Client
+	debug   *debug.Logger
 }
 
 // NewAnthropicProvider creates a new Anthropic provider.
 func NewAnthropicProvider(apiKey, baseURL string) *AnthropicProvider {
+	return NewAnthropicProviderWithDebug(apiKey, baseURL, debug.NewLogger(false))
+}
+
+// NewAnthropicProviderWithDebug creates a new Anthropic provider with debug logging.
+func NewAnthropicProviderWithDebug(apiKey, baseURL string, debugLogger *debug.Logger) *AnthropicProvider {
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com/v1"
 	}
@@ -27,7 +35,13 @@ func NewAnthropicProvider(apiKey, baseURL string) *AnthropicProvider {
 		apiKey:  apiKey,
 		baseURL: baseURL,
 		client:  &http.Client{},
+		debug:   debugLogger,
 	}
+}
+
+// SetDebugLogger sets the debug logger for this provider.
+func (p *AnthropicProvider) SetDebugLogger(debugLogger *debug.Logger) {
+	p.debug = debugLogger
 }
 
 // anthropicMessage represents a message in the Anthropic API format.
@@ -168,6 +182,26 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req Request) (Response
 		Tools:     tools,
 	}
 	
+	// Debug logging: Request
+	if p.debug.IsEnabled() {
+		msgMaps := make([]map[string]interface{}, len(req.Messages))
+		for i, msg := range req.Messages {
+			msgMaps[i] = map[string]interface{}{
+				"role":         msg.Role,
+				"content":      msg.Content,
+				"tool_call_id": msg.ToolCallID,
+			}
+		}
+		toolMaps := make([]map[string]interface{}, len(req.Tools))
+		for i, tool := range req.Tools {
+			toolMaps[i] = map[string]interface{}{
+				"name":        tool.Name,
+				"description": tool.Description,
+			}
+		}
+		p.debug.Request(req.Model, req.System, msgMaps, toolMaps)
+	}
+	
 	body, err := json.Marshal(anthReq)
 	if err != nil {
 		return Response{}, fmt.Errorf("failed to marshal request: %w", err)
@@ -226,7 +260,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req Request) (Response
 	// Determine if we're done based on stop_reason
 	done := anthResp.StopReason == "end_turn"
 	
-	return Response{
+	resp := Response{
 		Content:   content.String(),
 		ToolCalls: toolCalls,
 		Usage: TokenUsage{
@@ -235,7 +269,26 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req Request) (Response
 			TotalTokens:  anthResp.Usage.InputTokens + anthResp.Usage.OutputTokens,
 		},
 		Done: done,
-	}, nil
+	}
+	
+	// Debug logging: Response
+	if p.debug.IsEnabled() {
+		tcMaps := make([]map[string]interface{}, len(toolCalls))
+		for i, tc := range toolCalls {
+			tcMaps[i] = map[string]interface{}{
+				"id":        tc.ID,
+				"name":      tc.Name,
+				"arguments": tc.Arguments,
+			}
+		}
+		p.debug.Response(resp.Content, tcMaps, map[string]int{
+			"input":  resp.Usage.InputTokens,
+			"output": resp.Usage.OutputTokens,
+			"total":  resp.Usage.TotalTokens,
+		})
+	}
+	
+	return resp, nil
 }
 
 // CountTokens estimates token count using the approximate method.

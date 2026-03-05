@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/tuffrabit/boberto/internal/debug"
 )
 
 // OllamaProvider implements the Provider interface for Ollama.
@@ -201,4 +203,9 @@ func (p *OllamaProvider) unloadModelOnce(ctx context.Context, modelName string) 
 // SupportsModelManagement returns true for Ollama.
 func (p *OllamaProvider) SupportsModelManagement() bool {
 	return true
+}
+
+// SetDebugLogger sets the debug logger for this provider.
+func (p *OllamaProvider) SetDebugLogger(debugLogger *debug.Logger) {
+	p.openAI.SetDebugLogger(debugLogger)
 }

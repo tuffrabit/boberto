@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/tuffrabit/boberto/internal/debug"
 )
 
 // LMStudioProvider implements the Provider interface for LM Studio.
@@ -183,4 +185,9 @@ func (p *LMStudioProvider) unloadModelOnce(ctx context.Context, modelName string
 // SupportsModelManagement returns true for LM Studio.
 func (p *LMStudioProvider) SupportsModelManagement() bool {
 	return true
+}
+
+// SetDebugLogger sets the debug logger for this provider.
+func (p *LMStudioProvider) SetDebugLogger(debugLogger *debug.Logger) {
+	p.openAI.SetDebugLogger(debugLogger)
 }
