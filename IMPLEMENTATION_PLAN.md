@@ -522,12 +522,12 @@ The codebase should easily accommodate:
 - [x] Ignore pattern matching
 
 ### Phase 2: LLM Layer
-- [ ] Provider interface (with LoadModel/UnloadModel)
-- [ ] OpenAI provider (raw HTTP)
-- [ ] Anthropic provider (raw HTTP)
-- [ ] LM Studio provider (with model management)
-- [ ] Ollama provider (with model management)
-- [ ] Token counting utilities
+- [x] Provider interface (with LoadModel/UnloadModel)
+- [x] OpenAI provider (raw HTTP)
+- [x] Anthropic provider (raw HTTP)
+- [x] LM Studio provider (with model management)
+- [x] Ollama provider (with model management)
+- [x] Token counting utilities
 
 ### Phase 3: Tool System
 - [ ] Tool interface and registry
