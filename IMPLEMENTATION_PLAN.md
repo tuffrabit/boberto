@@ -616,12 +616,14 @@ The codebase should easily accommodate:
 - [x] FEEDBACK.md generation
 - [x] "LGTM" / completion detection
 
-### Phase 6: Ralph Loop
-- [ ] Iteration orchestration (start → worker → reviewer → repeat)
-- [ ] Model switching logic (worker↔reviewer VRAM management)
-- [ ] Token limit bail logic (threshold-based iteration cutoff)
-- [ ] Config hot-reload each iteration
-- [ ] Iteration limit enforcement (`-l` flag)
+### Phase 6: Ralph Loop ✅ COMPLETE
+- [x] Iteration orchestration (start → worker → reviewer → repeat)
+- [x] Model switching logic (worker↔reviewer VRAM management)
+- [x] Token limit bail logic (threshold-based iteration cutoff)
+- [x] Config hot-reload each iteration
+- [x] Iteration limit enforcement (`-l` flag)
+- [x] Completion mode flag (`--completion-mode`: both|worker|reviewer)
+- [x] Cascading retry logic (tool → iteration → exit)
 
 ### Phase 7: Polish
 - [ ] Error handling refinements
