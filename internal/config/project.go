@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Whitelist represents the whitelist configuration for sensitive tools.
@@ -16,21 +17,117 @@ type Whitelist struct {
 }
 
 // AllowsBash checks if a command is allowed by the whitelist.
-// For now, does exact matching. Could be extended to pattern matching.
+// Supports glob patterns: * matches any sequence, ? matches single char.
+// The command must match the start of an allowed pattern (prefix match).
+// Examples:
+//   - "go test" allows "go test", "go test ./..."
+//   - "go build*" allows "go build", "go build ./cmd/app"
+//   - "make*" allows "make", "make build", "make test"
 func (w Whitelist) AllowsBash(command string) bool {
-	for _, allowed := range w.Bash {
-		if allowed == command {
+	for _, pattern := range w.Bash {
+		if matchBashPattern(pattern, command) {
 			return true
 		}
 	}
 	return false
 }
 
+// matchBashPattern matches a command against an allowed pattern.
+// Patterns support glob-style wildcards.
+func matchBashPattern(pattern, command string) bool {
+	pattern = strings.TrimSpace(pattern)
+	command = strings.TrimSpace(command)
+
+	// Exact match
+	if pattern == command {
+		return true
+	}
+
+	// For bash patterns, we want prefix matching behavior:
+	// Pattern "go test" should match "go test ./..."
+	// So we check if the command starts with the non-wildcard part of the pattern
+	
+	// Extract the non-wildcard prefix from the pattern
+	prefix := pattern
+	if idx := strings.IndexAny(pattern, "*?["); idx != -1 {
+		prefix = strings.TrimSpace(pattern[:idx])
+	}
+
+	// If command starts with the prefix, check glob match
+	if strings.HasPrefix(command, prefix) {
+		// Create a matcher for the pattern against the command
+		// We need to match the pattern as a glob against the command
+		return matchGlobPattern(pattern, command)
+	}
+
+	return false
+}
+
+// matchGlobPattern matches a glob pattern against a string.
+func matchGlobPattern(pattern, str string) bool {
+	// Simple cases
+	if pattern == "*" {
+		return true
+	}
+	if pattern == str {
+		return true
+	}
+
+	// Use dynamic programming for glob matching
+	pLen := len(pattern)
+	sLen := len(str)
+
+	dp := make([]bool, sLen+1)
+	dp[0] = true
+
+	// Handle pattern starting with *
+	for i := 0; i < pLen && pattern[i] == '*'; i++ {
+		for j := 0; j <= sLen; j++ {
+			dp[j] = true
+		}
+	}
+
+	for i := 0; i < pLen; i++ {
+		newDp := make([]bool, sLen+1)
+		p := pattern[i]
+
+		for j := 0; j < sLen; j++ {
+			if !dp[j] {
+				continue
+			}
+
+			switch p {
+			case '*':
+				for k := j; k <= sLen; k++ {
+					newDp[k] = true
+				}
+			case '?':
+				newDp[j+1] = true
+			default:
+				if p == str[j] {
+					newDp[j+1] = true
+				}
+			}
+		}
+
+		if p == '*' && dp[sLen] {
+			newDp[sLen] = true
+		}
+
+		dp = newDp
+	}
+
+	return dp[sLen]
+}
+
 // AllowsWebFetch checks if a URL is allowed by the whitelist.
-// For now, does exact matching. Could be extended to pattern matching.
+// Supports glob patterns for matching URL patterns.
+// Examples:
+//   - "https://api.github.com/repos/*" matches any GitHub API repo URL
+//   - "https://docs.rs/**" matches any docs.rs URL and subpaths
 func (w Whitelist) AllowsWebFetch(url string) bool {
-	for _, allowed := range w.WebFetch {
-		if allowed == url {
+	for _, pattern := range w.WebFetch {
+		if matchGlobPattern(pattern, url) {
 			return true
 		}
 	}

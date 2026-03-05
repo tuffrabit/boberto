@@ -34,7 +34,6 @@ boberto/
 │   │   ├── glob.go              # Glob pattern tool
 │   │   ├── grep.go              # Grep search tool
 │   │   ├── bash.go              # Shell execution tool (sensitive)
-│   │   ├── websearch.go         # Web search tool (sensitive)
 │   │   └── webfetch.go          # Web fetch tool (sensitive)
 │   ├── fs/
 │   │   ├── sandbox.go           # Filesystem sandbox enforcement
@@ -230,7 +229,6 @@ type Whitelist struct {
 | `glob` | No | Find files matching pattern |
 | `grep` | No | Search file contents with regex |
 | `bash` | Yes | Execute shell commands |
-| `web_search` | Yes | Search the web |
 | `web_fetch` | Yes | Fetch URL content |
 
 ### Tool Registry
@@ -600,11 +598,11 @@ The codebase should easily accommodate:
 - [x] Ollama provider (with model management)
 - [x] Token counting utilities
 
-### Phase 3: Tool System
-- [ ] Tool interface and registry
-- [ ] Basic tools: read_file, write_file, glob, grep
-- [ ] Sensitive tools: bash, web_search, web_fetch
-- [ ] Whitelist enforcement
+### Phase 3: Tool System ✅ COMPLETE
+- [x] Tool interface and registry
+- [x] Basic tools: read_file, write_file, glob, grep
+- [x] Sensitive tools: bash, web_fetch
+- [x] Whitelist enforcement
 
 ### Phase 4: Agent Core
 - [ ] Worker implementation (tool calling **required**)
