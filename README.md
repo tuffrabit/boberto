@@ -1,5 +1,5 @@
 # boberto
-Boberto is a CLI agent
+Boberto is a CLI coding agent
 
 ## features
 
@@ -19,5 +19,11 @@ Boberto is a CLI agent
 
 ## cli arguments
 
-- -l / --limit max number of iterations, if omitted there is no hard limit and the iterations will only stop if the reviewer decides there is no feedback
-- i / --init creates a prd.md template in the current directory
+- -l / --limit, max number of iterations, if omitted there is no hard limit and the iterations will only stop if the reviewer decides there is no feedback
+- -i / --init, creates a prd.md template in the current directory
+- -d / --debug, prints agent conversation to stdout
+
+## safety
+
+- the agent will not execute tools outside of the project directory
+- outside of api calls to llm provider, the agent will not make network requests
