@@ -70,7 +70,8 @@ boberto/
       "local": true,
       "provider": "ollama",
       "context_window": 128000,
-      "bail_threshold": 0.85
+      "bail_threshold": 0.85,
+      "supports_tool_calling": false
     },
     "gpt-4o": {
       "api_type": "openai",
@@ -79,7 +80,8 @@ boberto/
       "name": "gpt-4o",
       "local": false,
       "context_window": 128000,
-      "bail_threshold": 0.80
+      "bail_threshold": 0.80,
+      "supports_tool_calling": true
     },
     "claude-sonnet": {
       "api_type": "anthropic",
@@ -88,7 +90,8 @@ boberto/
       "name": "claude-3-5-sonnet-20241022",
       "local": false,
       "context_window": 200000,
-      "bail_threshold": 0.80
+      "bail_threshold": 0.80,
+      "supports_tool_calling": true
     }
   },
   "worker": {
@@ -165,14 +168,21 @@ Loaded at the start of **each iteration** (hot-reloadable):
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  REVIEWER PHASE (if reviewer enabled)                           │
-│  1. Build reviewer prompt with:                                 │
-│     - PRD content                                               │
-│     - Worker's SUMMARY.md                                       │
-│     - List of changed files                                     │
-│  2. Request review from LLM                                     │
-│  3. If token limit approached during review:                    │
-│     - Bail and write abbreviated FEEDBACK.md                    │
-│  4. Write FEEDBACK.md (findings and suggestions)                │
+│                                                                 │
+│  IF model.supports_tool_calling:                                │
+│    1. Build reviewer prompt with available tools                │
+│    2. Tool loop: model explores codebase via tool calls         │
+│    3. Model generates FEEDBACK.md content                       │
+│                                                                 │
+│  ELSE (Boberto-mediated, no tool support):                      │
+│    1. Boberto pre-fetches context:                              │
+│       - PRD content                                             │
+│       - Worker's SUMMARY.md                                     │
+│       - Changed files with contents (up to token limit)         │
+│    2. Single prompt to model: "Review these changes"            │
+│    3. Model returns feedback directly in response               │
+│                                                                 │
+│  4. Boberto writes FEEDBACK.md (findings and suggestions)       │
 │  5. If FEEDBACK.md indicates "no feedback" / LGTM:              │
 │     - Exit loop, mark as complete                               │
 └──────────────────────────────┬──────────────────────────────────┘
@@ -266,6 +276,67 @@ func (t *BashTool) Execute(ctx context.Context, args map[string]any, whitelist W
   }
 }
 ```
+
+## Agent Tool Requirements
+
+### MVP Design: Capabilities-Based Approach
+
+Models vary in their ability to use tools effectively. The system adapts based on each model's declared capabilities.
+
+### Worker Agent
+
+| Tool Support | MVP Status | Notes |
+|--------------|------------|-------|
+| **Tool Calling** | **Required** | Worker MUST support tool calling in MVP |
+| No Tool Support | Not supported | Future consideration only |
+
+**Rationale:** The worker needs iterative exploration (read → understand → write). Implementing this without tool calls requires complex agent-mediated flows that are out of scope for MVP.
+
+### Reviewer Agent
+
+| Tool Support | MVP Status | Description |
+|--------------|------------|-------------|
+| **Tool Calling** | Supported | Reviewer uses tools to explore codebase and generate feedback |
+| **No Tool Support** | **Supported** | Boberto pre-fetches context; reviewer responds to structured prompt |
+
+**Boberto-Mediated Reviewer Flow:**
+
+```
+1. Boberto builds context package:
+   - PRD.md content
+   - Worker's SUMMARY.md
+   - Git diff of changed files
+   - File contents of changed files (up to token limit)
+
+2. Prompt model: "Review these changes against the PRD"
+
+3. Model returns feedback directly in response
+
+4. Boberto writes FEEDBACK.md
+```
+
+This allows using cheap local models (e.g., 7B parameters) that don't reliably handle tool calling as reviewers.
+
+### Model Configuration
+
+```json
+{
+  "models": {
+    "qwen2.5-coder": {
+      "supports_tool_calling": true,
+      "role": "worker"
+    },
+    "cheap-reviewer": {
+      "supports_tool_calling": false,
+      "role": "reviewer"
+    }
+  }
+}
+```
+
+- `supports_tool_calling` (boolean, optional, default: true)
+- Checked at runtime to determine reviewer mode
+- Ignored for worker (always requires tool support in MVP)
 
 ## LLM Client Design
 
@@ -536,8 +607,9 @@ The codebase should easily accommodate:
 - [ ] Whitelist enforcement
 
 ### Phase 4: Agent Core
-- [ ] Worker implementation
-- [ ] Reviewer implementation
+- [ ] Worker implementation (tool calling **required**)
+- [ ] Reviewer implementation - tool calling mode
+- [ ] Reviewer implementation - Boberto-mediated mode (no tool support)
 - [ ] Iteration loop
 - [ ] Model switching logic (worker↔reviewer)
 - [ ] SUMMARY.md / FEEDBACK.md generation
