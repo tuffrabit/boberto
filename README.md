@@ -53,6 +53,7 @@ boberto [options] <project-directory>
 | `-l, --limit N` | Maximum number of iterations (default: unlimited) |
 | `-d, --debug` | Print agent conversation to stdout |
 | `--no-model-switch` | Disable model loading/unloading between phases |
+| `--completion-mode` | When to consider work complete: `both` (default), `worker`, or `reviewer` |
 
 ### Examples
 
@@ -65,6 +66,12 @@ boberto [options] <project-directory>
 
 # Disable model switching (keep both models in VRAM)
 ./boberto --no-model-switch
+
+# Stop when worker indicates completion (skip reviewer approval)
+./boberto --completion-mode worker
+
+# Stop when reviewer LGTMs (even if worker has more work)
+./boberto --completion-mode reviewer
 ```
 
 ## Configuration
