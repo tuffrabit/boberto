@@ -27,7 +27,7 @@ func (t *ReadFileTool) Name() string {
 
 // Description returns the tool description.
 func (t *ReadFileTool) Description() string {
-	return "Read the contents of a file. Can optionally limit to specific line ranges."
+	return "Read the complete contents of a file. Returns the entire file content."
 }
 
 // Parameters returns the JSON Schema for the tool parameters.
@@ -42,10 +42,6 @@ func (t *ReadFileTool) Parameters() map[string]any {
 			"offset": map[string]any{
 				"type":        "integer",
 				"description": "Line number to start reading from (1-indexed, default: 1)",
-			},
-			"limit": map[string]any{
-				"type":        "integer",
-				"description": "Maximum number of lines to read. IMPORTANT: Omit this parameter to read the entire file. Only specify this when you explicitly need to limit the number of lines.",
 			},
 		},
 		"required": []string{"path"},
@@ -67,21 +63,13 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any, whiteli
 		}
 	}
 
-	limit := 0
-	if limitVal, ok := OptionalInt(args, "limit"); ok {
-		limit = limitVal
-		if limit < 1 {
-			return Failure("limit must be at least 1"), fmt.Errorf("limit must be at least 1")
-		}
-	}
-
 	// Read the file
 	content, err := t.sandbox.ReadFile(path)
 	if err != nil {
 		return Failure(fmt.Sprintf("failed to read file: %v", err)), nil
 	}
 
-	// Convert to lines for offset/limit handling
+	// Convert to lines for offset handling
 	lines := strings.Split(string(content), "\n")
 
 	// Apply offset
@@ -89,11 +77,6 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any, whiteli
 		return Failure(fmt.Sprintf("offset %d exceeds file length (%d lines)", offset, len(lines))), nil
 	}
 	lines = lines[offset-1:]
-
-	// Apply limit
-	if limit > 0 && limit < len(lines) {
-		lines = lines[:limit]
-	}
 
 	result := strings.Join(lines, "\n")
 	return Success(result), nil
