@@ -322,6 +322,45 @@ func (p *LMStudioProvider) SupportsModelManagement() bool {
 	return true
 }
 
+// GetLoadedModel returns the name of the currently loaded model in LM Studio.
+// Queries the /api/v1/models endpoint and returns the first model with loaded instances.
+func (p *LMStudioProvider) GetLoadedModel(ctx context.Context) (string, error) {
+	if !p.SupportsModelManagement() {
+		return "", nil
+	}
+
+	baseURL := p.lmStudioBaseURL()
+	listURL := baseURL + "/api/v1/models"
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", listURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create list models request: %w", err)
+	}
+
+	httpResp, err := p.client.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to send list models request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("list models request failed with status %d", httpResp.StatusCode)
+	}
+
+	var modelsResp lmStudioModelsResponse
+	if err := json.NewDecoder(httpResp.Body).Decode(&modelsResp); err != nil {
+		return "", fmt.Errorf("failed to parse list models response: %w", err)
+	}
+
+	// Return the first loaded model's key, or empty if none
+	for _, model := range modelsResp.Models {
+		if len(model.LoadedInstances) > 0 {
+			return model.Key, nil
+		}
+	}
+	return "", nil
+}
+
 // IsModelLoaded checks if a model is currently loaded in LM Studio.
 // It queries the /api/v1/models endpoint and checks the loaded_instances field.
 func (p *LMStudioProvider) IsModelLoaded(ctx context.Context, modelName string) (bool, error) {

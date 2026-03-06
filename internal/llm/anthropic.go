@@ -312,3 +312,9 @@ func (p *AnthropicProvider) UnloadModel(ctx context.Context, modelName string) e
 func (p *AnthropicProvider) SupportsModelManagement() bool {
 	return false
 }
+
+// GetLoadedModel returns empty string for Anthropic cloud API.
+// Model management is not supported for cloud providers.
+func (p *AnthropicProvider) GetLoadedModel(ctx context.Context) (string, error) {
+	return "", nil
+}

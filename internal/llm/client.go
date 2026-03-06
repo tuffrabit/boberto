@@ -74,6 +74,11 @@ type Provider interface {
 	// SupportsModelManagement returns true if this provider supports
 	// LoadModel/UnloadModel operations.
 	SupportsModelManagement() bool
+	
+	// GetLoadedModel returns the name of the currently loaded model, or empty string
+	// if no model is loaded. This is used to check the previous phase model status
+	// before loading the current phase model.
+	GetLoadedModel(ctx context.Context) (string, error)
 }
 
 // retryOperation retries an operation up to maxRetries times with the given delay.

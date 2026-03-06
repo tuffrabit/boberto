@@ -325,4 +325,10 @@ func (p *OpenAIProvider) SupportsModelManagement() bool {
 	return false
 }
 
+// GetLoadedModel returns empty string for OpenAI cloud API.
+// Model management is not supported for cloud providers.
+func (p *OpenAIProvider) GetLoadedModel(ctx context.Context) (string, error) {
+	return "", nil
+}
+
 

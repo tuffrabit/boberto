@@ -131,14 +131,29 @@ func (l *Loop) Run(ctx context.Context) error {
 
 		// ========== WORKER PHASE ==========
 
-		// Model switching: unload reviewer, load worker
+		// Model switching: check previous phase model status, unload if needed, load worker
 		if !l.opts.NoModelSwitch && bothLocal {
-			if l.reviewerModelLoaded {
+			// Check if a different model is already loaded from a previous run
+			loadedModel, err := l.getCurrentlyLoadedModel(ctx, workerModelCfg)
+			if err != nil {
+				fmt.Printf("Warning: failed to check loaded model: %v\n", err)
+			}
+			
+			// If reviewer model is loaded (from previous interrupted run), unload it
+			if loadedModel != "" && loadedModel != workerModelCfg.Name {
+				fmt.Printf("Unloading previously loaded model: %s\n", loadedModel)
+				if err := l.unloadModel(ctx, reviewerModelCfg); err != nil {
+					fmt.Printf("Warning: failed to unload previously loaded model: %v\n", err)
+				}
+				l.reviewerModelLoaded = false
+			} else if l.reviewerModelLoaded {
+				// Normal case: reviewer was loaded in this session
 				if err := l.unloadModel(ctx, reviewerModelCfg); err != nil {
 					fmt.Printf("Warning: failed to unload reviewer model: %v\n", err)
 				}
 				l.reviewerModelLoaded = false
 			}
+			
 			if err := l.loadModel(ctx, workerModelCfg); err != nil {
 				return fmt.Errorf("failed to load worker model after retries: %w", err)
 			}
@@ -161,14 +176,29 @@ func (l *Loop) Run(ctx context.Context) error {
 
 		// ========== REVIEWER PHASE ==========
 
-		// Model switching: unload worker, load reviewer
+		// Model switching: check previous phase model status, unload if needed, load reviewer
 		if !l.opts.NoModelSwitch && bothLocal {
-			if l.workerModelLoaded {
+			// Check if a different model is already loaded from a previous run
+			loadedModel, err := l.getCurrentlyLoadedModel(ctx, reviewerModelCfg)
+			if err != nil {
+				fmt.Printf("Warning: failed to check loaded model: %v\n", err)
+			}
+			
+			// If worker model is loaded (from previous interrupted run), unload it
+			if loadedModel != "" && loadedModel != reviewerModelCfg.Name {
+				fmt.Printf("Unloading previously loaded model: %s\n", loadedModel)
+				if err := l.unloadModel(ctx, workerModelCfg); err != nil {
+					fmt.Printf("Warning: failed to unload previously loaded model: %v\n", err)
+				}
+				l.workerModelLoaded = false
+			} else if l.workerModelLoaded {
+				// Normal case: worker was loaded in this session
 				if err := l.unloadModel(ctx, workerModelCfg); err != nil {
 					fmt.Printf("Warning: failed to unload worker model: %v\n", err)
 				}
 				l.workerModelLoaded = false
 			}
+			
 			if err := l.loadModel(ctx, reviewerModelCfg); err != nil {
 				return fmt.Errorf("failed to load reviewer model after retries: %w", err)
 			}
@@ -364,6 +394,30 @@ func (l *Loop) unloadModel(ctx context.Context, modelCfg config.ModelConfig) err
 	l.debug.Log("Unloading model: %s", modelCfg.Name)
 
 	return provider.UnloadModel(ctx, modelCfg.Name)
+}
+
+// getCurrentlyLoadedModel checks which model is currently loaded in the provider.
+// Returns empty string if no model is loaded or if the provider doesn't support model management.
+func (l *Loop) getCurrentlyLoadedModel(ctx context.Context, modelCfg config.ModelConfig) (string, error) {
+	provider, err := llm.NewProviderFromConfigWithDebug(modelCfg, l.debug)
+	if err != nil {
+		return "", err
+	}
+
+	if !provider.SupportsModelManagement() {
+		return "", nil
+	}
+
+	loadedModel, err := provider.GetLoadedModel(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if loadedModel != "" {
+		l.debug.Log("Provider reports loaded model: %s", loadedModel)
+	}
+
+	return loadedModel, nil
 }
 
 // cleanup performs cleanup at loop exit.

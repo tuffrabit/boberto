@@ -218,6 +218,52 @@ func (p *OllamaProvider) SupportsModelManagement() bool {
 	return true
 }
 
+// ollamaPsResponse represents the response from the /api/ps endpoint.
+type ollamaPsResponse struct {
+	Models []ollamaPsModel `json:"models"`
+}
+
+// ollamaPsModel represents a running model in Ollama.
+type ollamaPsModel struct {
+	Name string `json:"name"`
+}
+
+// GetLoadedModel returns the name of the currently loaded model in Ollama.
+// Uses the /api/ps endpoint to list running models.
+func (p *OllamaProvider) GetLoadedModel(ctx context.Context) (string, error) {
+	if !p.SupportsModelManagement() {
+		return "", nil
+	}
+
+	psURL := p.baseURL + "/api/ps"
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", psURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create ps request: %w", err)
+	}
+
+	httpResp, err := p.client.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to send ps request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("ps request failed with status %d", httpResp.StatusCode)
+	}
+
+	var psResp ollamaPsResponse
+	if err := json.NewDecoder(httpResp.Body).Decode(&psResp); err != nil {
+		return "", fmt.Errorf("failed to decode ps response: %w", err)
+	}
+
+	// Return the first loaded model name, or empty if none
+	if len(psResp.Models) > 0 {
+		return psResp.Models[0].Name, nil
+	}
+	return "", nil
+}
+
 // SetDebugLogger sets the debug logger for this provider.
 func (p *OllamaProvider) SetDebugLogger(debugLogger *debug.Logger) {
 	p.debug = debugLogger
