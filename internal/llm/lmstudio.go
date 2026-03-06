@@ -18,6 +18,7 @@ type LMStudioProvider struct {
 	baseURL string
 	client  *http.Client
 	openAI  *OpenAIProvider // Reuse OpenAI provider for chat completions
+	debug   *debug.Logger
 }
 
 // NewLMStudioProvider creates a new LM Studio provider.
@@ -83,6 +84,12 @@ func (p *LMStudioProvider) loadModelOnce(ctx context.Context, modelName string) 
 		return fmt.Errorf("failed to marshal load request: %w", err)
 	}
 	
+	if p.debug != nil && p.debug.IsEnabled() {
+		p.debug.Section("MODEL LOAD REQUEST → %s", modelName)
+		p.debug.Log("Endpoint: POST %s/models/load", p.baseURL)
+		p.debug.Log("Request body: %s", string(body))
+	}
+	
 	// LM Studio load endpoint is at /v1/models/load
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/models/load", bytes.NewReader(body))
 	if err != nil {
@@ -142,6 +149,12 @@ func (p *LMStudioProvider) unloadModelOnce(ctx context.Context, modelName string
 		return fmt.Errorf("failed to marshal unload request: %w", err)
 	}
 	
+	if p.debug != nil && p.debug.IsEnabled() {
+		p.debug.Section("MODEL UNLOAD REQUEST → %s", modelName)
+		p.debug.Log("Endpoint: POST %s/models/unload", p.baseURL)
+		p.debug.Log("Request body: %s", string(body))
+	}
+	
 	// LM Studio unload endpoint is at /v1/models/unload
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/models/unload", bytes.NewReader(body))
 	if err != nil {
@@ -189,5 +202,6 @@ func (p *LMStudioProvider) SupportsModelManagement() bool {
 
 // SetDebugLogger sets the debug logger for this provider.
 func (p *LMStudioProvider) SetDebugLogger(debugLogger *debug.Logger) {
+	p.debug = debugLogger
 	p.openAI.SetDebugLogger(debugLogger)
 }

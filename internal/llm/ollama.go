@@ -18,6 +18,7 @@ type OllamaProvider struct {
 	baseURL string
 	client  *http.Client
 	openAI  *OpenAIProvider // Reuse OpenAI provider for chat completions
+	debug   *debug.Logger
 }
 
 // NewOllamaProvider creates a new Ollama provider.
@@ -79,6 +80,12 @@ func (p *OllamaProvider) loadModelOnce(ctx context.Context, modelName string) er
 	body, err := json.Marshal(genReq)
 	if err != nil {
 		return fmt.Errorf("failed to marshal load request: %w", err)
+	}
+	
+	if p.debug != nil && p.debug.IsEnabled() {
+		p.debug.Section("MODEL LOAD REQUEST → %s", modelName)
+		p.debug.Log("Endpoint: POST %s/api/generate", p.baseURL)
+		p.debug.Log("Request body: %s", string(body))
 	}
 	
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/api/generate", bytes.NewReader(body))
@@ -152,6 +159,12 @@ func (p *OllamaProvider) unloadModelOnce(ctx context.Context, modelName string) 
 		return fmt.Errorf("failed to marshal unload request: %w", err)
 	}
 	
+	if p.debug != nil && p.debug.IsEnabled() {
+		p.debug.Section("MODEL UNLOAD REQUEST → %s", modelName)
+		p.debug.Log("Endpoint: POST %s/api/generate", p.baseURL)
+		p.debug.Log("Request body: %s", string(body))
+	}
+	
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/api/generate", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to create unload request: %w", err)
@@ -207,5 +220,6 @@ func (p *OllamaProvider) SupportsModelManagement() bool {
 
 // SetDebugLogger sets the debug logger for this provider.
 func (p *OllamaProvider) SetDebugLogger(debugLogger *debug.Logger) {
+	p.debug = debugLogger
 	p.openAI.SetDebugLogger(debugLogger)
 }
