@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/tuffrabit/boberto/internal/debug"
 )
@@ -84,14 +85,17 @@ func (p *LMStudioProvider) loadModelOnce(ctx context.Context, modelName string) 
 		return fmt.Errorf("failed to marshal load request: %w", err)
 	}
 	
+	baseURL := p.lmStudioBaseURL()
+	loadURL := baseURL + "/api/v1/models/load"
+	
 	if p.debug != nil && p.debug.IsEnabled() {
 		p.debug.Section("MODEL LOAD REQUEST → %s", modelName)
-		p.debug.Log("Endpoint: POST %s/models/load", p.baseURL)
+		p.debug.Log("Endpoint: POST %s", loadURL)
 		p.debug.Log("Request body: %s", string(body))
 	}
 	
-	// LM Studio load endpoint is at /v1/models/load
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/models/load", bytes.NewReader(body))
+	// LM Studio load endpoint is at /api/v1/models/load
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", loadURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to create load request: %w", err)
 	}
@@ -149,14 +153,17 @@ func (p *LMStudioProvider) unloadModelOnce(ctx context.Context, modelName string
 		return fmt.Errorf("failed to marshal unload request: %w", err)
 	}
 	
+	baseURL := p.lmStudioBaseURL()
+	unloadURL := baseURL + "/api/v1/models/unload"
+	
 	if p.debug != nil && p.debug.IsEnabled() {
 		p.debug.Section("MODEL UNLOAD REQUEST → %s", modelName)
-		p.debug.Log("Endpoint: POST %s/models/unload", p.baseURL)
+		p.debug.Log("Endpoint: POST %s", unloadURL)
 		p.debug.Log("Request body: %s", string(body))
 	}
 	
-	// LM Studio unload endpoint is at /v1/models/unload
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/models/unload", bytes.NewReader(body))
+	// LM Studio unload endpoint is at /api/v1/models/unload
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", unloadURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to create unload request: %w", err)
 	}
@@ -204,4 +211,20 @@ func (p *LMStudioProvider) SupportsModelManagement() bool {
 func (p *LMStudioProvider) SetDebugLogger(debugLogger *debug.Logger) {
 	p.debug = debugLogger
 	p.openAI.SetDebugLogger(debugLogger)
+}
+
+// lmStudioBaseURL extracts the LM Studio base URL (without /v1) from the configured baseURL.
+// The baseURL is typically "http://host:port/v1" for OpenAI compatibility,
+// but LM Studio's native API is at "http://host:port/api/v1".
+func (p *LMStudioProvider) lmStudioBaseURL() string {
+	// Parse the configured baseURL
+	u, err := url.Parse(p.baseURL)
+	if err != nil {
+		// Fallback to localhost if parsing fails
+		return "http://localhost:1234"
+	}
+	
+	// Build the base URL without the path (removing /v1 suffix)
+	base := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+	return base
 }
