@@ -56,6 +56,26 @@ type lmStudioUnloadResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+// lmStudioModel represents a model in the LM Studio models list.
+type lmStudioModel struct {
+	Type            string                    `json:"type"`
+	Publisher       string                    `json:"publisher"`
+	Key             string                    `json:"key"`
+	DisplayName     string                    `json:"display_name"`
+	LoadedInstances []lmStudioLoadedInstance  `json:"loaded_instances"`
+}
+
+// lmStudioLoadedInstance represents a loaded instance of a model.
+type lmStudioLoadedInstance struct {
+	ID     string                 `json:"id"`
+	Config map[string]interface{} `json:"config"`
+}
+
+// lmStudioModelsResponse represents the response from the list models endpoint.
+type lmStudioModelsResponse struct {
+	Models []lmStudioModel `json:"models"`
+}
+
 // Complete delegates to the OpenAI-compatible provider.
 func (p *LMStudioProvider) Complete(ctx context.Context, req Request) (Response, error) {
 	return p.openAI.Complete(ctx, req)
@@ -67,8 +87,27 @@ func (p *LMStudioProvider) CountTokens(text string) (int, error) {
 }
 
 // LoadModel loads a model into LM Studio memory.
+// First checks if the model is already loaded, and if so, returns immediately.
 // Retries on failure and returns an error if it can't recover.
 func (p *LMStudioProvider) LoadModel(ctx context.Context, modelName string) error {
+	// First check if the model is already loaded
+	isLoaded, err := p.IsModelLoaded(ctx, modelName)
+	if err != nil {
+		if p.debug != nil && p.debug.IsEnabled() {
+			p.debug.Section("MODEL LOAD CHECK FAILED → %s", modelName)
+			p.debug.Log("Error: %v", err)
+		}
+		// Continue with load attempt even if check fails
+	}
+	
+	if isLoaded {
+		if p.debug != nil && p.debug.IsEnabled() {
+			p.debug.Section("MODEL ALREADY LOADED → %s", modelName)
+			p.debug.Log("Skipping load request - model is already in memory")
+		}
+		return nil
+	}
+	
 	return retryOperation(ctx, defaultMaxRetries, defaultRetryDelay, func() error {
 		return p.loadModelOnce(ctx, modelName)
 	})
@@ -205,6 +244,66 @@ func (p *LMStudioProvider) unloadModelOnce(ctx context.Context, modelName string
 // SupportsModelManagement returns true for LM Studio.
 func (p *LMStudioProvider) SupportsModelManagement() bool {
 	return true
+}
+
+// IsModelLoaded checks if a model is currently loaded in LM Studio.
+// It queries the /api/v1/models endpoint and checks the loaded_instances field.
+func (p *LMStudioProvider) IsModelLoaded(ctx context.Context, modelName string) (bool, error) {
+	baseURL := p.lmStudioBaseURL()
+	listURL := baseURL + "/api/v1/models"
+	
+	if p.debug != nil && p.debug.IsEnabled() {
+		p.debug.Section("CHECKING MODEL LOAD STATUS → %s", modelName)
+		p.debug.Log("Endpoint: GET %s", listURL)
+	}
+	
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", listURL, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create list models request: %w", err)
+	}
+	
+	httpResp, err := p.client.Do(httpReq)
+	if err != nil {
+		return false, fmt.Errorf("failed to send list models request: %w", err)
+	}
+	defer httpResp.Body.Close()
+	
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read list models response: %w", err)
+	}
+	
+	if httpResp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("list models request failed with status %d: %s", httpResp.StatusCode, string(respBody))
+	}
+	
+	var modelsResp lmStudioModelsResponse
+	if err := json.Unmarshal(respBody, &modelsResp); err != nil {
+		return false, fmt.Errorf("failed to parse list models response: %w", err)
+	}
+	
+	// Search for the model and check if it has loaded instances
+	for _, model := range modelsResp.Models {
+		// Match by key (model identifier) or display_name
+		if model.Key == modelName || model.DisplayName == modelName {
+			isLoaded := len(model.LoadedInstances) > 0
+			if p.debug != nil && p.debug.IsEnabled() {
+				if isLoaded {
+					p.debug.Log("Found model with %d loaded instance(s)", len(model.LoadedInstances))
+				} else {
+					p.debug.Log("Model found but no loaded instances")
+				}
+			}
+			return isLoaded, nil
+		}
+	}
+	
+	if p.debug != nil && p.debug.IsEnabled() {
+		p.debug.Log("Model not found in available models list")
+	}
+	
+	// Model not found in the list, consider it not loaded
+	return false, nil
 }
 
 // SetDebugLogger sets the debug logger for this provider.
