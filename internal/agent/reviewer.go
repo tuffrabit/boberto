@@ -111,8 +111,14 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 	r.debug.Log("System prompt tokens: %d", systemTokens)
 	r.debug.Log("Bail limit: %d tokens", r.bailLimit)
 
-	// Initialize conversation
-	messages := []llm.Message{}
+	// Initialize conversation with a user message to start the review
+	// The model requires at least one user message to respond
+	messages := []llm.Message{
+		{
+			Role:    "user",
+			Content: "Please review the worker's implementation against the PRD requirements. Analyze the changes made and provide constructive feedback.",
+		},
+	}
 
 	// Tool definitions
 	toolDefs := r.buildToolDefinitions(whitelist)

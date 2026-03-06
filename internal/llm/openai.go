@@ -84,6 +84,7 @@ type openAIRequest struct {
 	Tools       []openAITool     `json:"tools,omitempty"`
 	MaxTokens   int              `json:"max_tokens,omitempty"`
 	Temperature float64          `json:"temperature,omitempty"`
+	Stream      bool             `json:"stream,omitempty"`
 }
 
 // openAIResponse represents a response from the OpenAI API.
@@ -93,7 +94,7 @@ type openAIResponse struct {
 	Created int64            `json:"created"`
 	Model   string           `json:"model"`
 	Choices []openAIChoice   `json:"choices"`
-	Usage   openAIUsage      `json:"usage"`
+	Usage   *openAIUsage     `json:"usage,omitempty"`
 	Error   *openAIError     `json:"error,omitempty"`
 }
 
@@ -101,7 +102,7 @@ type openAIResponse struct {
 type openAIChoice struct {
 	Index        int           `json:"index"`
 	Message      openAIMessage `json:"message"`
-	FinishReason string        `json:"finish_reason"`
+	FinishReason string        `json:"finish_reason,omitempty"`
 }
 
 // openAIUsage represents token usage in the OpenAI API response.
@@ -163,12 +164,19 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 		}
 	}
 	
+	// Set defaults for optional parameters
+	maxTokens := req.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096 // Default max tokens if not specified
+	}
+	
 	oaiReq := openAIRequest{
 		Model:       req.Model,
 		Messages:    messages,
 		Tools:       tools,
-		MaxTokens:   req.MaxTokens,
+		MaxTokens:   maxTokens,
 		Temperature: 0.7,
+		Stream:      false, // Explicitly request non-streaming response
 	}
 	
 	// Debug logging: Request
@@ -208,7 +216,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 	
 	httpResp, err := p.client.Do(httpReq)
 	if err != nil {
-		return Response{}, fmt.Errorf("failed to send request: %w", err)
+		return Response{}, fmt.Errorf("failed to send request to %s: %w", p.baseURL+"/chat/completions", err)
 	}
 	defer httpResp.Body.Close()
 	
@@ -218,7 +226,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 	}
 	
 	if httpResp.StatusCode != http.StatusOK {
-		return Response{}, fmt.Errorf("HTTP error %d: %s", httpResp.StatusCode, string(respBody))
+		return Response{}, fmt.Errorf("HTTP error %d from %s: %s", httpResp.StatusCode, p.baseURL+"/chat/completions", string(respBody))
 	}
 	
 	var oaiResp openAIResponse
@@ -258,15 +266,21 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 	// Determine if we're done based on finish_reason
 	done := choice.FinishReason == "stop"
 	
-	resp := Response{
-		Content:   message.Content,
-		ToolCalls: toolCalls,
-		Usage: TokenUsage{
+	// Handle optional usage field
+	var usage TokenUsage
+	if oaiResp.Usage != nil {
+		usage = TokenUsage{
 			InputTokens:  oaiResp.Usage.PromptTokens,
 			OutputTokens: oaiResp.Usage.CompletionTokens,
 			TotalTokens:  oaiResp.Usage.TotalTokens,
-		},
-		Done: done,
+		}
+	}
+	
+	resp := Response{
+		Content:   message.Content,
+		ToolCalls: toolCalls,
+		Usage:     usage,
+		Done:      done,
 	}
 	
 	// Debug logging: Response

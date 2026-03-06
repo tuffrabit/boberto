@@ -103,8 +103,14 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 	w.debug.Log("System prompt tokens: %d", systemTokens)
 	w.debug.Log("Bail limit: %d tokens", w.bailLimit)
 
-	// Initialize conversation
-	messages := []llm.Message{}
+	// Initialize conversation with a user message to start the task
+	// The model requires at least one user message to respond
+	messages := []llm.Message{
+		{
+			Role:    "user",
+			Content: "Please analyze the PRD and start implementing the requirements. Begin by exploring the codebase to understand the current state, then make necessary changes.",
+		},
+	}
 
 	// Tool definitions
 	toolDefs := w.buildToolDefinitions(projectCfg.Whitelist)
