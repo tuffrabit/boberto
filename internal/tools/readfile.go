@@ -45,7 +45,7 @@ func (t *ReadFileTool) Parameters() map[string]any {
 			},
 			"limit": map[string]any{
 				"type":        "integer",
-				"description": "Maximum number of lines to read (default: read entire file)",
+				"description": "Maximum number of lines to read. IMPORTANT: Omit this parameter to read the entire file. Only specify this when you explicitly need to limit the number of lines.",
 			},
 		},
 		"required": []string{"path"},
