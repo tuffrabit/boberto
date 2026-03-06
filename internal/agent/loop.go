@@ -137,7 +137,7 @@ func (l *Loop) Run(ctx context.Context) error {
 				l.reviewerModelLoaded = false
 			}
 			if err := l.loadModel(ctx, workerModelCfg); err != nil {
-				fmt.Printf("Warning: failed to load worker model: %v\n", err)
+				return fmt.Errorf("failed to load worker model after retries: %w", err)
 			}
 			l.workerModelLoaded = true
 		}
@@ -167,7 +167,7 @@ func (l *Loop) Run(ctx context.Context) error {
 				l.workerModelLoaded = false
 			}
 			if err := l.loadModel(ctx, reviewerModelCfg); err != nil {
-				fmt.Printf("Warning: failed to load reviewer model: %v\n", err)
+				return fmt.Errorf("failed to load reviewer model after retries: %w", err)
 			}
 			l.reviewerModelLoaded = true
 		}
