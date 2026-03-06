@@ -6,11 +6,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/tuffrabit/boberto/internal/config"
 	"github.com/tuffrabit/boberto/internal/fs"
 )
+
+// historyFilePattern matches SUMMARY_N.md and FEEDBACK_N.md files
+var historyFilePattern = regexp.MustCompile(`^(SUMMARY|FEEDBACK)_\d+\.md$`)
+
+// isHistoryFile checks if a filename is a history file that should be hidden from models.
+func isHistoryFile(filename string) bool {
+	return historyFilePattern.MatchString(filename)
+}
 
 // GlobTool finds files matching a glob pattern.
 type GlobTool struct {
@@ -80,13 +89,17 @@ func (t *GlobTool) Execute(ctx context.Context, args map[string]any, whitelist c
 			return Failure(fmt.Sprintf("invalid pattern: %v", err)), nil
 		}
 
-		// Convert to relative paths and filter by ignore patterns
+		// Convert to relative paths and filter by ignore patterns and history files
 		for _, match := range fileMatches {
 			relPath, err := filepath.Rel(t.sandbox.Root, match)
 			if err != nil {
 				continue
 			}
 			if t.sandbox.Ignore != nil && t.sandbox.Ignore.Match(relPath) {
+				continue
+			}
+			// Skip history files (SUMMARY_N.md, FEEDBACK_N.md)
+			if isHistoryFile(filepath.Base(relPath)) {
 				continue
 			}
 			matches = append(matches, relPath)
@@ -180,6 +193,11 @@ func (t *GlobTool) findWithSuffix(suffix string) ([]string, error) {
 			return nil
 		}
 
+		// Skip history files (SUMMARY_N.md, FEEDBACK_N.md)
+		if isHistoryFile(filepath.Base(relPath)) {
+			return nil
+		}
+
 		// Check if file matches suffix pattern
 		matched, err := filepath.Match(suffix, relPath)
 		if err != nil {
@@ -229,6 +247,11 @@ func (t *GlobTool) findWithPrefixAndSuffix(prefix, suffix string) ([]string, err
 
 		// Check ignore patterns
 		if t.sandbox.Ignore != nil && t.sandbox.Ignore.Match(relPath) {
+			return nil
+		}
+
+		// Skip history files (SUMMARY_N.md, FEEDBACK_N.md)
+		if isHistoryFile(filepath.Base(relPath)) {
 			return nil
 		}
 

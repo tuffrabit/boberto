@@ -46,6 +46,9 @@ type LoopOptions struct {
 
 	// CompletionMode determines when the loop considers work complete.
 	CompletionMode CompletionMode
+
+	// History enables keeping history of SUMMARY.md and FEEDBACK.md files.
+	History bool
 }
 
 // IterationStats tracks statistics for a single iteration.
@@ -280,6 +283,7 @@ func (l *Loop) runWorker(ctx context.Context, provider llm.Provider, modelCfg co
 		ProjectDir:  l.opts.ProjectDir,
 		Debug:       l.debug,
 		Iteration:   l.iteration,
+		History:     l.opts.History,
 	})
 
 	return worker.Run(ctx)
@@ -324,6 +328,7 @@ func (l *Loop) runReviewer(ctx context.Context, provider llm.Provider, modelCfg 
 		ProjectDir:  l.opts.ProjectDir,
 		Debug:       l.debug,
 		Iteration:   l.iteration,
+		History:     l.opts.History,
 	})
 
 	return reviewer.Run(ctx)

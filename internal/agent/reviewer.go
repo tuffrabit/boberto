@@ -29,6 +29,9 @@ type Reviewer struct {
 
 	// Iteration tracking
 	iteration int
+
+	// History mode
+	history   bool
 }
 
 // ReviewerOptions contains configuration options for the Reviewer.
@@ -39,6 +42,7 @@ type ReviewerOptions struct {
 	ProjectDir  string
 	Debug       *debug.Logger
 	Iteration   int
+	History     bool
 }
 
 // NewReviewer creates a new Reviewer agent.
@@ -59,6 +63,7 @@ func NewReviewer(opts ReviewerOptions) *Reviewer {
 		tokensUsed:  0,
 		bailLimit:   bailLimit,
 		iteration:   opts.Iteration,
+		history:     opts.History,
 	}
 }
 
@@ -537,8 +542,52 @@ func (r *Reviewer) loadSummary() (string, error) {
 func (r *Reviewer) writeFeedback(ctx context.Context, content string) error {
 	r.debug.Log("Writing FEEDBACK.md (%d bytes)", len(content))
 
+	// If history mode is enabled, rotate the existing FEEDBACK.md file
+	if r.history {
+		if err := r.rotateFeedback(); err != nil {
+			r.debug.Log("Warning: failed to rotate FEEDBACK.md: %v", err)
+		}
+	}
+
 	data := []byte(content)
 	return r.sandbox.WriteFile("FEEDBACK.md", data, 0644)
+}
+
+// rotateFeedback rotates the existing FEEDBACK.md to FEEDBACK_N.md.
+func (r *Reviewer) rotateFeedback() error {
+	// Check if FEEDBACK.md exists
+	_, err := r.sandbox.Stat("FEEDBACK.md")
+	if err != nil {
+		// File doesn't exist, nothing to rotate
+		return nil
+	}
+
+	// Find the next available iteration number
+	iteration := 1
+	for {
+		historyPath := fmt.Sprintf("FEEDBACK_%d.md", iteration)
+		_, err := r.sandbox.Stat(historyPath)
+		if err != nil {
+			// File doesn't exist, we can use this iteration number
+			break
+		}
+		iteration++
+	}
+
+	// Read the existing FEEDBACK.md
+	data, err := r.sandbox.ReadFile("FEEDBACK.md")
+	if err != nil {
+		return fmt.Errorf("failed to read FEEDBACK.md: %w", err)
+	}
+
+	// Write to the history file
+	historyPath := fmt.Sprintf("FEEDBACK_%d.md", iteration)
+	if err := r.sandbox.WriteFile(historyPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", historyPath, err)
+	}
+
+	r.debug.Log("Rotated FEEDBACK.md to %s", historyPath)
+	return nil
 }
 
 // createResult creates a ReviewResult from feedback content.

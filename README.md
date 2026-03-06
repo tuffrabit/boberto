@@ -59,6 +59,7 @@ boberto [options] <project-directory>
 | `-d, --debug` | Print detailed agent conversation to stdout |
 | `--no-model-switch` | Disable model loading/unloading between phases |
 | `--completion-mode` | When to consider work complete: `both` (default), `worker`, or `reviewer` |
+| `--history` | Keep history of SUMMARY.md and FEEDBACK.md files as SUMMARY_N.md and FEEDBACK_N.md |
 
 ### Examples
 
@@ -77,6 +78,9 @@ boberto [options] <project-directory>
 
 # Stop when reviewer LGTMs (even if worker has more work)
 ./boberto --completion-mode reviewer
+
+# Keep history of SUMMARY.md and FEEDBACK.md files
+./boberto --history
 ```
 
 ## Configuration
@@ -179,9 +183,20 @@ Optional per-project configuration (hot-reloadable at the start of each iteratio
 ├── PRD.md              # Product Requirements Document (required)
 ├── SUMMARY.md          # Worker progress report (auto-generated each iteration)
 ├── FEEDBACK.md         # Reviewer feedback (auto-generated each iteration)
+├── SUMMARY_1.md        # Previous iteration summary (with --history flag)
+├── FEEDBACK_1.md       # Previous iteration feedback (with --history flag)
 └── .boberto/
     └── config.json     # Project config (optional, hot-reloadable)
 ```
+
+### History Mode
+
+With the `--history` flag, Boberto preserves previous iterations' SUMMARY.md and FEEDBACK.md files by rotating them to numbered versions before writing new ones:
+
+- Before writing SUMMARY.md, the existing file is renamed to SUMMARY_1.md, SUMMARY_2.md, etc.
+- Before writing FEEDBACK.md, the existing file is renamed to FEEDBACK_1.md, FEEDBACK_2.md, etc.
+- History files are automatically hidden from tool calls (glob, grep) so models remain unaware of them.
+- When not using `--history`, the default behavior (overwriting files) remains unchanged.
 
 ## How It Works
 

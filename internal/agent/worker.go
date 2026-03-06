@@ -30,6 +30,9 @@ type Worker struct {
 	// Iteration tracking
 	iteration    int
 	wroteFileThisIteration bool
+
+	// History mode
+	history      bool
 }
 
 // WorkerOptions contains configuration options for the Worker.
@@ -40,6 +43,7 @@ type WorkerOptions struct {
 	ProjectDir   string
 	Debug        *debug.Logger
 	Iteration    int
+	History      bool
 }
 
 // NewWorker creates a new Worker agent.
@@ -61,6 +65,7 @@ func NewWorker(opts WorkerOptions) *Worker {
 		bailLimit:   bailLimit,
 		iteration:   opts.Iteration,
 		wroteFileThisIteration: false,
+		history:     opts.History,
 	}
 }
 
@@ -345,9 +350,53 @@ func (w *Worker) loadFeedback() (string, error) {
 // writeSummary writes the SUMMARY.md file.
 func (w *Worker) writeSummary(ctx context.Context, content string) error {
 	w.debug.Log("Writing SUMMARY.md (%d bytes)", len(content))
-	
+
+	// If history mode is enabled, rotate the existing SUMMARY.md file
+	if w.history {
+		if err := w.rotateSummary(); err != nil {
+			w.debug.Log("Warning: failed to rotate SUMMARY.md: %v", err)
+		}
+	}
+
 	data := []byte(content)
 	return w.sandbox.WriteFile("SUMMARY.md", data, 0644)
+}
+
+// rotateSummary rotates the existing SUMMARY.md to SUMMARY_N.md.
+func (w *Worker) rotateSummary() error {
+	// Check if SUMMARY.md exists
+	_, err := w.sandbox.Stat("SUMMARY.md")
+	if err != nil {
+		// File doesn't exist, nothing to rotate
+		return nil
+	}
+
+	// Find the next available iteration number
+	iteration := 1
+	for {
+		historyPath := fmt.Sprintf("SUMMARY_%d.md", iteration)
+		_, err := w.sandbox.Stat(historyPath)
+		if err != nil {
+			// File doesn't exist, we can use this iteration number
+			break
+		}
+		iteration++
+	}
+
+	// Read the existing SUMMARY.md
+	data, err := w.sandbox.ReadFile("SUMMARY.md")
+	if err != nil {
+		return fmt.Errorf("failed to read SUMMARY.md: %w", err)
+	}
+
+	// Write to the history file
+	historyPath := fmt.Sprintf("SUMMARY_%d.md", iteration)
+	if err := w.sandbox.WriteFile(historyPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", historyPath, err)
+	}
+
+	w.debug.Log("Rotated SUMMARY.md to %s", historyPath)
+	return nil
 }
 
 // wroteSummary checks if the content appears to be a summary.
