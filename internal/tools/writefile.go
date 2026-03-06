@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/tuffrabit/boberto/internal/config"
 	"github.com/tuffrabit/boberto/internal/fs"
@@ -41,7 +42,7 @@ func (t *WriteFileTool) Parameters() map[string]any {
 			},
 			"content": map[string]any{
 				"type":        "string",
-				"description": "Content to write to the file",
+				"description": "Content to write to the file. IMPORTANT: For files larger than ~8000 characters, use append=true and write in multiple smaller chunks.",
 			},
 			"append": map[string]any{
 				"type":        "boolean",
@@ -62,6 +63,30 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any, whitel
 	content, err := ExtractString(args, "content")
 	if err != nil {
 		return Failure(err.Error()), err
+	}
+
+	// Validate content doesn't appear to be truncated/corrupted
+	// Check for common signs of mid-generation truncation
+	if len(content) > 100 {
+		// Check for unclosed strings, incomplete CSS properties, etc.
+		unclosedQuotes := strings.Count(content, "\"")%2 != 0
+		unclosedSingleQuotes := strings.Count(content, "'")%2 != 0
+		unclosedBackticks := strings.Count(content, "`")%2 != 0
+		
+		// Check for incomplete CSS/JS patterns at the end
+		trimmed := strings.TrimSpace(content)
+		if len(trimmed) > 0 {
+			lastChar := trimmed[len(trimmed)-1]
+			// Check if content ends mid-statement (with an operator or opening brace)
+			endsMidStatement := lastChar == ':' || lastChar == ',' || lastChar == '+' || 
+				lastChar == '-' || lastChar == '*' || lastChar == '/' || lastChar == '=' ||
+				lastChar == '(' || lastChar == '{' || lastChar == '['
+			
+			if unclosedQuotes || unclosedSingleQuotes || unclosedBackticks || endsMidStatement {
+				return Failure("Content appears to be truncated or incomplete (unclosed quotes or incomplete statement). " +
+					"Please use smaller chunks with append=true when writing large files."), nil
+			}
+		}
 	}
 
 	appendMode := false

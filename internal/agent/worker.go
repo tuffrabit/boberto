@@ -176,6 +176,21 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 
 		resp, err := w.provider.Complete(ctx, req)
 		if err != nil {
+			// Check if this was a truncation error (max_tokens hit)
+			if strings.Contains(err.Error(), "truncated") || strings.Contains(err.Error(), "max_tokens") {
+				w.debug.Log("Response was truncated due to max_tokens limit. Adding guidance to use smaller chunks.")
+				
+				// Add a message to guide the model to use smaller chunks
+				retryMsg := llm.Message{
+					Role:    "user",
+					Content: "Your previous response was truncated because it exceeded the token limit. When writing large files, please use write_file with append=true and write in smaller chunks (max ~4000 characters per chunk). Continue from where you left off.",
+				}
+				messages = append(messages, retryMsg)
+				w.tokensUsed += 100 // Approximate token count for the message
+				
+				// Continue the loop to retry
+				continue
+			}
 			return false, fmt.Errorf("LLM completion failed: %w", err)
 		}
 
