@@ -103,9 +103,3 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any, whiteli
 func (t *ReadFileTool) IsSensitive() bool {
 	return false
 }
-
-// Register the tool
-func init() {
-	// This will be registered by the agent when it has a sandbox
-	// We can't register here because we need the sandbox instance
-}

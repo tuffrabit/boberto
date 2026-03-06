@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/tuffrabit/boberto/internal/config"
+	"github.com/tuffrabit/boberto/internal/fs"
 )
 
 // Tool is the interface that all tools must implement.
@@ -160,4 +162,18 @@ func OptionalInt(args map[string]any, name string) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// InitTools initializes and registers all tools with the given sandbox.
+// This should be called once at application startup after the sandbox is created.
+func InitTools(sandbox *fs.Sandbox) {
+	// Register file-based tools (require sandbox)
+	Register(NewGlobTool(sandbox))
+	Register(NewReadFileTool(sandbox))
+	Register(NewWriteFileTool(sandbox))
+	Register(NewGrepTool(sandbox))
+
+	// Register non-file-based tools (no sandbox needed)
+	Register(NewBashTool(60 * time.Second))
+	Register(NewWebFetchTool(30 * time.Second))
 }

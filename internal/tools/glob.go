@@ -262,3 +262,5 @@ func (t *GlobTool) findWithPrefixAndSuffix(prefix, suffix string) ([]string, err
 func (t *GlobTool) IsSensitive() bool {
 	return false
 }
+
+// init function removed - tools are now registered by InitTools() with sandbox
