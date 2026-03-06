@@ -4,7 +4,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/tuffrabit/boberto/internal/config"
@@ -507,16 +506,11 @@ func (l *Loop) rotateFile(filename string) error {
 		return fmt.Errorf("failed to write %s: %w", historyPath, err)
 	}
 
-	// Delete the original file so the model sees no existing file
-	validPath, err := l.opts.Sandbox.Validate(filename)
-	if err != nil {
-		return fmt.Errorf("failed to validate %s for deletion: %w", filename, err)
-	}
-	if err := os.Remove(validPath); err != nil {
-		return fmt.Errorf("failed to remove %s: %w", filename, err)
-	}
+	// Note: The original file is NOT deleted - it remains available for the
+	// worker/reviewer to read during this iteration. The worker will overwrite
+	// SUMMARY.md and the reviewer will overwrite FEEDBACK.md when they're done.
 
-	l.debug.Log("Rotated %s to %s", filename, historyPath)
-	fmt.Printf("  Rotated %s -> %s\n", filename, historyPath)
+	l.debug.Log("Preserved history: %s -> %s", filename, historyPath)
+	fmt.Printf("  Preserved history: %s -> %s\n", filename, historyPath)
 	return nil
 }
