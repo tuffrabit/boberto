@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/tuffrabit/boberto/internal/config"
@@ -73,6 +74,9 @@ type Loop struct {
 	// Statistics tracking
 	iterations []IterationStats
 	startTime  time.Time
+	
+	// History tracking
+	historyRotated bool
 }
 
 // NewLoop creates a new Ralph Loop orchestrator.
@@ -86,6 +90,7 @@ func NewLoop(opts LoopOptions) *Loop {
 		reviewerModelLoaded: false,
 		iterations:          make([]IterationStats, 0),
 		startTime:           time.Now(),
+		historyRotated:      false,
 	}
 }
 
@@ -107,6 +112,15 @@ func (l *Loop) Run(ctx context.Context) error {
 			fmt.Printf(" (last took ~%dms)", l.lastIterTime.Milliseconds())
 		}
 		fmt.Println()
+
+		// Rotate history files at the start of each new iteration (after the first)
+		// This ensures the models don't see the previous iteration's files
+		if l.opts.History && l.iteration > 1 && !l.historyRotated {
+			if err := l.rotateHistoryFiles(); err != nil {
+				fmt.Printf("Warning: failed to rotate history files: %v\n", err)
+			}
+			l.historyRotated = true
+		}
 
 		// Hot-reload project config at start of each iteration
 		projectCfg, err := config.LoadProject(l.opts.ProjectDir)
@@ -237,6 +251,9 @@ func (l *Loop) Run(ctx context.Context) error {
 		})
 		fmt.Printf("\nIteration %d completed in %dms\n", l.iteration, l.lastIterTime.Milliseconds())
 
+		// Reset history rotation flag for next iteration
+		l.historyRotated = false
+
 		// If worker is done but reviewer isn't (in both mode), we continue looping
 		// The worker will see the reviewer's feedback and may have more work to do
 	}
@@ -313,7 +330,6 @@ func (l *Loop) runWorker(ctx context.Context, provider llm.Provider, modelCfg co
 		ProjectDir:  l.opts.ProjectDir,
 		Debug:       l.debug,
 		Iteration:   l.iteration,
-		History:     l.opts.History,
 	})
 
 	return worker.Run(ctx)
@@ -358,7 +374,6 @@ func (l *Loop) runReviewer(ctx context.Context, provider llm.Provider, modelCfg 
 		ProjectDir:  l.opts.ProjectDir,
 		Debug:       l.debug,
 		Iteration:   l.iteration,
-		History:     l.opts.History,
 	})
 
 	return reviewer.Run(ctx)
@@ -439,4 +454,69 @@ func isBailError(err error) bool {
 	// For now, we don't have explicit bail errors
 	// The worker/reviewer handle bails internally and return nil error
 	return false
+}
+
+// rotateHistoryFiles rotates SUMMARY.md and FEEDBACK.md to their history versions.
+// This should be called at the start of each iteration (after the first).
+func (l *Loop) rotateHistoryFiles() error {
+	l.debug.Log("Rotating history files for iteration %d", l.iteration)
+
+	// Rotate SUMMARY.md
+	if err := l.rotateFile("SUMMARY.md"); err != nil {
+		return fmt.Errorf("failed to rotate SUMMARY.md: %w", err)
+	}
+
+	// Rotate FEEDBACK.md
+	if err := l.rotateFile("FEEDBACK.md"); err != nil {
+		return fmt.Errorf("failed to rotate FEEDBACK.md: %w", err)
+	}
+
+	return nil
+}
+
+// rotateFile rotates a single file to its history version (e.g., FILE.md -> FILE_N.md).
+func (l *Loop) rotateFile(filename string) error {
+	// Check if file exists
+	_, err := l.opts.Sandbox.Stat(filename)
+	if err != nil {
+		// File doesn't exist, nothing to rotate
+		return nil
+	}
+
+	// Find the next available iteration number
+	iteration := 1
+	for {
+		historyPath := fmt.Sprintf("%s_%d.md", filename[:len(filename)-3], iteration)
+		_, err := l.opts.Sandbox.Stat(historyPath)
+		if err != nil {
+			// File doesn't exist, we can use this iteration number
+			break
+		}
+		iteration++
+	}
+
+	// Read the existing file
+	data, err := l.opts.Sandbox.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %w", filename, err)
+	}
+
+	// Write to the history file
+	historyPath := fmt.Sprintf("%s_%d.md", filename[:len(filename)-3], iteration)
+	if err := l.opts.Sandbox.WriteFile(historyPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", historyPath, err)
+	}
+
+	// Delete the original file so the model sees no existing file
+	validPath, err := l.opts.Sandbox.Validate(filename)
+	if err != nil {
+		return fmt.Errorf("failed to validate %s for deletion: %w", filename, err)
+	}
+	if err := os.Remove(validPath); err != nil {
+		return fmt.Errorf("failed to remove %s: %w", filename, err)
+	}
+
+	l.debug.Log("Rotated %s to %s", filename, historyPath)
+	fmt.Printf("  Rotated %s -> %s\n", filename, historyPath)
+	return nil
 }
