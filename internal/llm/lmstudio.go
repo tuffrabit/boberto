@@ -47,7 +47,7 @@ type lmStudioLoadResponse struct {
 
 // lmStudioUnloadRequest represents a model unload request.
 type lmStudioUnloadRequest struct {
-	Model string `json:"model"`
+	InstanceID string `json:"instance_id"`
 }
 
 // lmStudioUnloadResponse represents a model unload response.
@@ -182,9 +182,23 @@ func (p *LMStudioProvider) UnloadModel(ctx context.Context, modelName string) er
 }
 
 // unloadModelOnce attempts to unload a model once.
+// First queries the model to get its instance ID, then sends the unload request.
 func (p *LMStudioProvider) unloadModelOnce(ctx context.Context, modelName string) error {
+	// First, get the instance ID of the loaded model
+	instanceID, err := p.getLoadedInstanceID(ctx, modelName)
+	if err != nil {
+		return fmt.Errorf("failed to get loaded instance ID: %w", err)
+	}
+	
+	if instanceID == "" {
+		if p.debug != nil && p.debug.IsEnabled() {
+			p.debug.Log("Model %s is not loaded or has no instances", modelName)
+		}
+		return nil // Model is not loaded, nothing to unload
+	}
+	
 	unloadReq := lmStudioUnloadRequest{
-		Model: modelName,
+		InstanceID: instanceID,
 	}
 	
 	body, err := json.Marshal(unloadReq)
@@ -239,6 +253,68 @@ func (p *LMStudioProvider) unloadModelOnce(ctx context.Context, modelName string
 	}
 	
 	return nil
+}
+
+// getLoadedInstanceID retrieves the instance ID of a loaded model.
+// Returns empty string if the model is not loaded or has no instances.
+func (p *LMStudioProvider) getLoadedInstanceID(ctx context.Context, modelName string) (string, error) {
+	baseURL := p.lmStudioBaseURL()
+	listURL := baseURL + "/api/v1/models"
+	
+	if p.debug != nil && p.debug.IsEnabled() {
+		p.debug.Section("FETCHING INSTANCE ID → %s", modelName)
+		p.debug.Log("Endpoint: GET %s", listURL)
+	}
+	
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", listURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create list models request: %w", err)
+	}
+	
+	httpResp, err := p.client.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to send list models request: %w", err)
+	}
+	defer httpResp.Body.Close()
+	
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read list models response: %w", err)
+	}
+	
+	if httpResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("list models request failed with status %d: %s", httpResp.StatusCode, string(respBody))
+	}
+	
+	var modelsResp lmStudioModelsResponse
+	if err := json.Unmarshal(respBody, &modelsResp); err != nil {
+		return "", fmt.Errorf("failed to parse list models response: %w", err)
+	}
+	
+	// Search for the model and return its first loaded instance ID
+	for _, model := range modelsResp.Models {
+		// Match by key (model identifier) or display_name
+		if model.Key == modelName || model.DisplayName == modelName {
+			if len(model.LoadedInstances) > 0 {
+				instanceID := model.LoadedInstances[0].ID
+				if p.debug != nil && p.debug.IsEnabled() {
+					p.debug.Log("Found instance ID: %s", instanceID)
+				}
+				return instanceID, nil
+			}
+			if p.debug != nil && p.debug.IsEnabled() {
+				p.debug.Log("Model found but no loaded instances")
+			}
+			return "", nil // Model found but not loaded
+		}
+	}
+	
+	if p.debug != nil && p.debug.IsEnabled() {
+		p.debug.Log("Model not found in available models list")
+	}
+	
+	// Model not found in the list
+	return "", nil
 }
 
 // SupportsModelManagement returns true for LM Studio.
