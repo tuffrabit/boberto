@@ -144,6 +144,7 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 				Messages:  messages,
 				Tools:     toolDefs,
 				MaxTokens: 4096,
+				ExtraBody: r.modelConfig.ExtraBody,
 			}
 
 			resp, err := r.provider.Complete(ctx, req)
@@ -169,6 +170,7 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 			Messages:  messages,
 			Tools:     toolDefs,
 			MaxTokens: 4096,
+			ExtraBody: r.modelConfig.ExtraBody,
 		}
 
 		r.debug.Log("Sending request to LLM...")
@@ -272,6 +274,7 @@ func (r *Reviewer) runMediatedMode(ctx context.Context, whitelist config.Whiteli
 		System:    systemPrompt,
 		Messages:  []llm.Message{},
 		MaxTokens: 4096,
+		ExtraBody: r.modelConfig.ExtraBody,
 	}
 
 	r.debug.Log("Sending mediated review request...")

@@ -199,9 +199,26 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req Request) (Response, e
 		p.debug.Request(req.Model, req.System, msgMaps, toolMaps)
 	}
 	
+	// Marshal the base request
 	body, err := json.Marshal(oaiReq)
 	if err != nil {
 		return Response{}, fmt.Errorf("failed to marshal request: %w", err)
+	}
+	
+	// If ExtraBody is provided, merge it into the request
+	if len(req.ExtraBody) > 0 {
+		var reqMap map[string]interface{}
+		if err := json.Unmarshal(body, &reqMap); err != nil {
+			return Response{}, fmt.Errorf("failed to unmarshal request for merging: %w", err)
+		}
+		// Merge ExtraBody fields (ExtraBody takes precedence for conflicts)
+		for k, v := range req.ExtraBody {
+			reqMap[k] = v
+		}
+		body, err = json.Marshal(reqMap)
+		if err != nil {
+			return Response{}, fmt.Errorf("failed to marshal merged request: %w", err)
+		}
 	}
 	
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat/completions", bytes.NewReader(body))

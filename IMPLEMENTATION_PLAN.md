@@ -336,6 +336,27 @@ This allows using cheap local models (e.g., 7B parameters) that don't reliably h
 - Checked at runtime to determine reviewer mode
 - Ignored for worker (always requires tool support in MVP)
 
+#### Extra Body Parameters
+
+The `extra_body` field allows passing provider-specific parameters in the API request body:
+
+```json
+{
+  "models": {
+    "qwen3.5": {
+      "api_type": "openai",
+      "uri": "http://localhost:1234/v1/chat/completions",
+      "name": "qwen3.5-35b",
+      "extra_body": {
+        "chat_template_kwargs": {"enable_thinking": false}
+      }
+    }
+  }
+}
+```
+
+This is useful for models like Qwen3.5 that require special parameters to control behavior (e.g., disabling thinking mode). The `extra_body` fields are merged into the request body before sending to the API.
+
 ## LLM Client Design
 
 ### Provider Interface

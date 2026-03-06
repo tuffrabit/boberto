@@ -19,15 +19,16 @@ func GlobalConfigPath() string {
 
 // ModelConfig represents a single model configuration.
 type ModelConfig struct {
-	APIType            string  `json:"api_type"`
-	APIKey             string  `json:"api_key"`
-	URI                string  `json:"uri"`
-	Name               string  `json:"name"`
-	Local              bool    `json:"local"`
-	Provider           string  `json:"provider,omitempty"`
-	ContextWindow      int     `json:"context_window"`
-	BailThreshold      float64 `json:"bail_threshold"`
-	SupportsToolCalling bool   `json:"supports_tool_calling"`
+	APIType            string                 `json:"api_type"`
+	APIKey             string                 `json:"api_key"`
+	URI                string                 `json:"uri"`
+	Name               string                 `json:"name"`
+	Local              bool                   `json:"local"`
+	Provider           string                 `json:"provider,omitempty"`
+	ContextWindow      int                    `json:"context_window"`
+	BailThreshold      float64                `json:"bail_threshold"`
+	SupportsToolCalling bool                  `json:"supports_tool_calling"`
+	ExtraBody          map[string]interface{} `json:"extra_body,omitempty"`
 }
 
 // WorkerConfig represents worker agent configuration.

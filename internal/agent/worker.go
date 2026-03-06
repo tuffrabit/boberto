@@ -137,6 +137,7 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 				Messages:  messages,
 				Tools:     toolDefs,
 				MaxTokens: 4096,
+				ExtraBody: w.modelConfig.ExtraBody,
 			}
 			
 			resp, err := w.provider.Complete(ctx, req)
@@ -168,6 +169,7 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 			Messages:  messages,
 			Tools:     toolDefs,
 			MaxTokens: 4096,
+			ExtraBody: w.modelConfig.ExtraBody,
 		}
 
 		w.debug.Log("Sending request to LLM...")

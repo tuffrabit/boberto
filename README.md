@@ -154,6 +154,32 @@ Created automatically on first run with sensible defaults:
 - `context_window`: Maximum context size in tokens
 - `bail_threshold`: Percentage of context window at which to bail (0.0-1.0)
 - `supports_tool_calling`: Whether the model supports native tool calling
+- `extra_body`: Additional JSON parameters to include in the API request body (provider-specific)
+
+**Using `extra_body` for Model-Specific Parameters:**
+
+Some models require special parameters in the request body. For example, to disable thinking mode in Qwen3.5 via LM Studio:
+
+```json
+{
+  "models": {
+    "qwen3.5": {
+      "api_type": "openai",
+      "api_key": "not-needed",
+      "uri": "http://localhost:1234/v1/chat/completions",
+      "name": "qwen3.5-35b",
+      "local": true,
+      "provider": "lmstudio",
+      "context_window": 32768,
+      "bail_threshold": 0.75,
+      "supports_tool_calling": true,
+      "extra_body": {
+        "chat_template_kwargs": {"enable_thinking": false}
+      }
+    }
+  }
+}
+```
 
 ### Project Config (`.boberto/config.json`)
 

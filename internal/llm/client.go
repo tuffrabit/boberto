@@ -33,10 +33,11 @@ type ToolDefinition struct {
 // Request represents a completion request.
 type Request struct {
 	Model     string
-	System    string          // System prompt (for providers that support it separately)
-	Messages  []Message       // Conversation history
-	Tools     []ToolDefinition // Available tools
-	MaxTokens int             // Maximum tokens for the response
+	System    string                 // System prompt (for providers that support it separately)
+	Messages  []Message              // Conversation history
+	Tools     []ToolDefinition       // Available tools
+	MaxTokens int                    // Maximum tokens for the response
+	ExtraBody map[string]interface{} // Extra body parameters to pass to the API (e.g., for LM Studio)
 }
 
 // Response represents a completion response.
