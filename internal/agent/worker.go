@@ -136,7 +136,7 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 				System:    systemPrompt,
 				Messages:  messages,
 				Tools:     toolDefs,
-				MaxTokens: 4096,
+				MaxTokens: w.modelConfig.GetMaxTokens(),
 				ExtraBody: w.modelConfig.ExtraBody,
 			}
 			
@@ -168,7 +168,7 @@ func (w *Worker) Run(ctx context.Context) (bool, error) {
 			System:    systemPrompt,
 			Messages:  messages,
 			Tools:     toolDefs,
-			MaxTokens: 4096,
+			MaxTokens: w.modelConfig.GetMaxTokens(),
 			ExtraBody: w.modelConfig.ExtraBody,
 		}
 

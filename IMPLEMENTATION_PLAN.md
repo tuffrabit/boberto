@@ -59,6 +59,7 @@ boberto/
       "local": true,
       "provider": "lmstudio",
       "context_window": 32768,
+      "max_tokens": 4096,
       "bail_threshold": 0.75
     },
     "llama3.3-reviewer": {
@@ -79,6 +80,7 @@ boberto/
       "name": "gpt-4o",
       "local": false,
       "context_window": 128000,
+      "max_tokens": 4096,
       "bail_threshold": 0.80,
       "supports_tool_calling": true
     },
@@ -89,6 +91,7 @@ boberto/
       "name": "claude-3-5-sonnet-20241022",
       "local": false,
       "context_window": 200000,
+      "max_tokens": 4096,
       "bail_threshold": 0.80,
       "supports_tool_calling": true
     }

@@ -19,16 +19,29 @@ func GlobalConfigPath() string {
 
 // ModelConfig represents a single model configuration.
 type ModelConfig struct {
-	APIType            string                 `json:"api_type"`
-	APIKey             string                 `json:"api_key"`
-	URI                string                 `json:"uri"`
-	Name               string                 `json:"name"`
-	Local              bool                   `json:"local"`
-	Provider           string                 `json:"provider,omitempty"`
-	ContextWindow      int                    `json:"context_window"`
-	BailThreshold      float64                `json:"bail_threshold"`
-	SupportsToolCalling bool                  `json:"supports_tool_calling"`
-	ExtraBody          map[string]interface{} `json:"extra_body,omitempty"`
+	APIType             string                 `json:"api_type"`
+	APIKey              string                 `json:"api_key"`
+	URI                 string                 `json:"uri"`
+	Name                string                 `json:"name"`
+	Local               bool                   `json:"local"`
+	Provider            string                 `json:"provider,omitempty"`
+	ContextWindow       int                    `json:"context_window"`
+	MaxTokens           int                    `json:"max_tokens"`
+	BailThreshold       float64                `json:"bail_threshold"`
+	SupportsToolCalling bool                   `json:"supports_tool_calling"`
+	ExtraBody           map[string]interface{} `json:"extra_body,omitempty"`
+}
+
+// DefaultMaxTokens is the default maximum tokens for model responses.
+const DefaultMaxTokens = 4096
+
+// GetMaxTokens returns the max_tokens value for this model config.
+// If the config value is 0 or negative, it returns the default (4096).
+func (m ModelConfig) GetMaxTokens() int {
+	if m.MaxTokens <= 0 {
+		return DefaultMaxTokens
+	}
+	return m.MaxTokens
 }
 
 // WorkerConfig represents worker agent configuration.

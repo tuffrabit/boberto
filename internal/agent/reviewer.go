@@ -143,7 +143,7 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 				System:    systemPrompt,
 				Messages:  messages,
 				Tools:     toolDefs,
-				MaxTokens: 4096,
+				MaxTokens: r.modelConfig.GetMaxTokens(),
 				ExtraBody: r.modelConfig.ExtraBody,
 			}
 
@@ -169,7 +169,7 @@ func (r *Reviewer) runToolMode(ctx context.Context, whitelist config.Whitelist) 
 			System:    systemPrompt,
 			Messages:  messages,
 			Tools:     toolDefs,
-			MaxTokens: 4096,
+			MaxTokens: r.modelConfig.GetMaxTokens(),
 			ExtraBody: r.modelConfig.ExtraBody,
 		}
 
@@ -273,7 +273,7 @@ func (r *Reviewer) runMediatedMode(ctx context.Context, whitelist config.Whiteli
 		Model:     r.modelConfig.Name,
 		System:    systemPrompt,
 		Messages:  []llm.Message{},
-		MaxTokens: 4096,
+		MaxTokens: r.modelConfig.GetMaxTokens(),
 		ExtraBody: r.modelConfig.ExtraBody,
 	}
 
